@@ -1,7 +1,7 @@
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, Redirect, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -16,10 +16,12 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { SubscriptionProvider, useSubscription } from "@/contexts/SubscriptionContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 // Note: Error logging is auto-initialized via index.ts import
 
 // Only wrap with ErrorBoundary in dev — production apps should not include it
+import { isOnboardingComplete } from "@/utils/onboardingStorage";
 const DevErrorBoundary = __DEV__
   ? ErrorBoundary
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
@@ -31,12 +33,54 @@ export const unstable_settings = {
   initialRouteName: "(tabs)", // Ensure any route can link back to `/`
 };
 
+
+function SubscriptionRedirect() {
+  const { isSubscribed, loading } = useSubscription();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (loading) return;
+    const onOnboarding = pathname.startsWith("/onboarding");
+    if (onOnboarding) return;
+
+    let cancelled = false;
+    isOnboardingComplete().then((done) => {
+      if (cancelled) return;
+      if (!done) return;
+      const onPaywall = pathname === "/paywall";
+      if (onPaywall) return;
+      if (!isSubscribed) {
+        router.replace("/paywall");
+      }
+    }).catch(() => {
+      if (cancelled) return;
+      const onPaywall = pathname === "/paywall";
+      if (onPaywall) return;
+      if (!isSubscribed) {
+        router.replace("/paywall");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isSubscribed, loading, pathname]);
+
+  return null;
+}
+
 export default function RootLayout() {
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const pathname = usePathname();
   const colorScheme = useColorScheme();
   const networkState = useNetworkState();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  useEffect(() => {
+    isOnboardingComplete().then((complete) => {
+      setOnboardingComplete(complete);
+    });
+  }, [pathname]);
 
   useEffect(() => {
     if (loaded) {
@@ -55,6 +99,10 @@ export default function RootLayout() {
       );
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
+
+  if (onboardingComplete === null) {
+    return null;
+  }
 
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
@@ -81,7 +129,9 @@ export default function RootLayout() {
     },
   };
   return (
-    <DevErrorBoundary>
+    <SubscriptionProvider>
+          <SubscriptionRedirect />
+  <DevErrorBoundary>
       <StatusBar style="auto" animated />
         <ThemeProvider
           value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
@@ -89,9 +139,15 @@ export default function RootLayout() {
           <SafeAreaProvider>
             <WidgetProvider>
               <GestureHandlerRootView>
+              {onboardingComplete === false && pathname !== "/auth" && pathname !== "/paywall" && pathname !== "/auth-popup" && pathname !== "/auth-callback" && <Redirect href="/onboarding" />}
+
               <Stack>
                 {/* Main app with tabs */}
+                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="results" options={{ headerShown: false, presentation: 'card' }} />
+                <Stack.Screen name="paywall" options={{ headerShown: false }} />
+                <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style={"auto"} />
               </GestureHandlerRootView>
@@ -99,5 +155,6 @@ export default function RootLayout() {
           </SafeAreaProvider>
         </ThemeProvider>
     </DevErrorBoundary>
+    </SubscriptionProvider>
   );
 }
