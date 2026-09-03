@@ -57,15 +57,18 @@ export default function OnboardingScreen() {
   }, [isFirstStep, goBack]);
 
   const handleSelect = (optionId: string) => {
+    console.log(`[Onboarding] Selected option: ${optionId} on step ${currentStep}`);
     setAnswers((prev) => ({ ...prev, [currentStep]: optionId }));
   };
 
   const handleContinue = async () => {
     if (!selectedOption) return;
+    console.log(`[Onboarding] Continue pressed on step ${currentStep}/${TOTAL_STEPS - 1}, answer: ${selectedOption}`);
 
     if (isLastStep) {
       await completeOnboarding();
-      router.replace("/paywall");
+      console.log('[Onboarding] Completed onboarding, navigating to tabs');
+      router.replace("/(tabs)");
     } else {
       if (isAnimating.current) return;
       isAnimating.current = true;
