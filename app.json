@@ -4,7 +4,7 @@
     "slug": "woodeye",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/newly.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/newly.png",
@@ -24,7 +24,11 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.woodeye.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/newly.png",
