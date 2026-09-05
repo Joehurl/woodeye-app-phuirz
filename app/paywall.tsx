@@ -462,6 +462,15 @@ export default function PaywallScreen() {
                   Subscription automatically renews unless canceled at least 24 hours
                   before the end of the current period.
                 </Text>
+
+                {/* Terms of Service - Required by Apple Guideline 3.1.2 */}
+                <TouchableOpacity
+                  onPress={() =>
+                    Linking.openURL("https://woodeye.app/terms-of-service")
+                  }
+                >
+                  <Text style={styles.tosLink}>Terms of Service</Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -770,6 +779,13 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.6)",
     textAlign: "center",
     lineHeight: 16,
+  },
+  tosLink: {
+    fontSize: 11,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    textDecorationLine: "underline",
+    marginTop: 6,
   },
 
   // Web mock purchase dialog (View-based, since Alert.alert with multiple buttons fails on web)
