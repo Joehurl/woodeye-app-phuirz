@@ -15,7 +15,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.woodeye.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "WoodEye uses your camera to photograph wood samples for AI species identification.",
+        "NSPhotoLibraryUsageDescription": "WoodEye accesses your photo library so you can select wood photos for AI species identification."
       }
     },
     "android": {
@@ -27,7 +29,8 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
       ]
     },
     "web": {
