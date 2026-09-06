@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "WoodEye",
-    "slug": "woodeye",
+    "slug": "woodeye-app-phuirz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,7 +25,7 @@
         "foregroundImage": "./assets/images/newly.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.joe.woodeye",
+      "package": "com.woodeye.app",
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
