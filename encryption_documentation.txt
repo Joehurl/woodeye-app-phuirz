@@ -1,0 +1,43 @@
+---
+
+App Encryption Documentation
+App Name: WoodEye
+Bundle ID: com.woodeye.app
+Version: 1.0
+
+Encryption Usage Declaration
+------------------------------
+WoodEye uses standard encryption algorithms for the sole purpose of securing data in transit. Specifically:
+
+1. HTTPS / TLS (Transport Layer Security)
+   - All network communication between the app and backend servers uses HTTPS with TLS 1.2 or higher.
+   - This is standard encryption provided by Apple's iOS networking stack (NSURLSession / URLSession).
+   - No custom or proprietary encryption is implemented.
+
+2. Supabase Client Library
+   - The app uses the official @supabase/supabase-js client, which communicates exclusively over HTTPS/TLS.
+   - No additional encryption layers are added beyond what the library provides by default.
+
+3. RevenueCat SDK
+   - The RevenueCat SDK communicates with RevenueCat servers over HTTPS/TLS.
+   - No custom encryption is implemented within the SDK integration.
+
+Exemption Claim
+------------------------------
+This app qualifies for the encryption exemption under US Export Administration Regulations (EAR) because:
+- It uses only standard, publicly available encryption (TLS/HTTPS).
+- The encryption is not the primary feature of the app.
+- The app is not a security or encryption tool.
+
+The app does NOT:
+- Implement any proprietary encryption algorithms.
+- Use encryption for purposes other than securing data in transit.
+- Include any cryptographic functionality beyond standard HTTPS/TLS.
+
+Applicable Regulation: EAR 740.17(b)(1) — Encryption Registration (ENC)
+ERN (Encryption Registration Number): Not required for apps using only standard HTTPS/TLS.
+
+Prepared by: WoodEye Development Team
+Date: 2025
+
+---
