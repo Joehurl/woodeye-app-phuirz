@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,13 @@ import {
   ScrollView,
   Pressable,
   Linking,
+  Switch,
   useColorScheme,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Settings,
   Crown,
@@ -21,9 +23,20 @@ import {
   RefreshCw,
   BookOpen,
   WifiOff,
+  GitCompare,
+  Bell,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import {
+  registerForPushNotifications,
+  scheduleDailyWoodFact,
+  cancelDailyNotifications,
+  areNotificationsEnabled,
+} from '@/utils/notifications';
+
+const DEVICE_ID_KEY = 'woodeye_device_id';
+const NOTIF_ENABLED_KEY = 'woodeye_notif_enabled';
 
 const PRIVACY_POLICY_URL =
   'https://www.freeprivacypolicy.com/live/abf6b3a7-f310-4a49-811f-d9fefdef1750';
@@ -105,6 +118,9 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { isSubscribed, restorePurchases, loading } = useSubscription();
 
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+
   const bg = isDark ? COLORS.backgroundDark : COLORS.background;
   const textColor = isDark ? COLORS.textDark : COLORS.text;
   const textSecondary = isDark ? COLORS.textSecondaryDark : COLORS.textSecondary;
@@ -112,6 +128,59 @@ export default function SettingsScreen() {
   const borderColor = isDark ? COLORS.borderDark : COLORS.border;
 
   const appVersion = Constants.expoConfig?.version || '1.0.0';
+
+  // Sync notification toggle state on mount
+  useEffect(() => {
+    const syncNotifState = async () => {
+      try {
+        const [permEnabled, storedEnabled] = await Promise.all([
+          areNotificationsEnabled(),
+          AsyncStorage.getItem(NOTIF_ENABLED_KEY),
+        ]);
+        const enabled = permEnabled && storedEnabled === 'true';
+        console.log('[WoodEye] Settings: notification state synced — permEnabled:', permEnabled, 'storedEnabled:', storedEnabled);
+        setNotifEnabled(enabled);
+      } catch (e) {
+        console.error('[WoodEye] Settings: failed to sync notification state:', e);
+      }
+    };
+    syncNotifState();
+  }, []);
+
+  const handleNotifToggle = useCallback(async (value: boolean) => {
+    console.log('[WoodEye] Settings: notification toggle pressed, new value:', value);
+    setNotifLoading(true);
+    try {
+      if (value) {
+        // Get or create device ID
+        let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+        if (!deviceId) {
+          deviceId = `device_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+        }
+        const granted = await registerForPushNotifications(deviceId);
+        console.log('[WoodEye] Settings: push registration result:', granted);
+        if (granted) {
+          await scheduleDailyWoodFact();
+          await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'true');
+          setNotifEnabled(true);
+          console.log('[WoodEye] Settings: daily wood fact notifications enabled');
+        } else {
+          console.log('[WoodEye] Settings: permission not granted, toggle stays off');
+          setNotifEnabled(false);
+        }
+      } else {
+        await cancelDailyNotifications();
+        await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
+        setNotifEnabled(false);
+        console.log('[WoodEye] Settings: daily wood fact notifications disabled');
+      }
+    } catch (e) {
+      console.error('[WoodEye] Settings: notification toggle error:', e);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
 
   const handleUpgrade = useCallback(() => {
     console.log('[WoodEye] Upgrade to Premium pressed from settings');
@@ -121,6 +190,11 @@ export default function SettingsScreen() {
   const handleSpeciesLibrary = useCallback(() => {
     console.log('[WoodEye] Species Library pressed from settings');
     router.push('/species-library');
+  }, [router]);
+
+  const handleCompare = useCallback(() => {
+    console.log('[WoodEye] Compare Woods pressed from settings');
+    router.push('/compare');
   }, [router]);
 
   const handleManageSubscription = useCallback(() => {
@@ -271,6 +345,17 @@ export default function SettingsScreen() {
               borderColor={borderColor}
             />
             <SettingsRow
+              icon={<GitCompare size={18} color={COLORS.primary} strokeWidth={2} />}
+              label="Compare Woods"
+              sublabel="Side-by-side species comparison"
+              onPress={handleCompare}
+              isDark={isDark}
+              textColor={textColor}
+              textSecondary={textSecondary}
+              surfaceColor={surfaceColor}
+              borderColor={borderColor}
+            />
+            <SettingsRow
               icon={<WifiOff size={18} color={COLORS.primary} strokeWidth={2} />}
               label="Offline Mode"
               sublabel="Species library works without internet"
@@ -280,6 +365,34 @@ export default function SettingsScreen() {
               surfaceColor={surfaceColor}
               borderColor={borderColor}
               isLast
+            />
+          </View>
+        </View>
+
+        {/* Notifications section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: textSecondary }]}>Notifications</Text>
+          <View style={[styles.settingsGroup, { borderColor }]}>
+            <SettingsRow
+              icon={<Bell size={18} color={COLORS.primary} strokeWidth={2} />}
+              label="Daily Wood Facts"
+              sublabel="Get a fascinating wood fact every morning"
+              isDark={isDark}
+              textColor={textColor}
+              textSecondary={textSecondary}
+              surfaceColor={surfaceColor}
+              borderColor={borderColor}
+              isLast
+              rightElement={
+                <Switch
+                  value={notifEnabled}
+                  onValueChange={handleNotifToggle}
+                  disabled={notifLoading}
+                  trackColor={{ false: isDark ? '#3A2010' : '#E5D5C8', true: COLORS.primary }}
+                  thumbColor={notifEnabled ? '#FFFFFF' : (isDark ? '#C4957A' : '#8B6355')}
+                  ios_backgroundColor={isDark ? '#3A2010' : '#E5D5C8'}
+                />
+              }
             />
           </View>
         </View>

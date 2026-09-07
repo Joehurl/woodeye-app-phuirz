@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Clock, Leaf, ChevronRight, TreePine } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 const DEVICE_ID_KEY = 'woodeye_device_id';
 const SUPABASE_URL = 'https://owcjjbrmmjgwfrhysavz.supabase.co';
@@ -138,12 +139,12 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
 
   const [scans, setScans] = useState<ScanResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const bg = isDark ? COLORS.backgroundDark : COLORS.background;
   const textColor = isDark ? COLORS.textDark : COLORS.text;
@@ -203,17 +204,14 @@ export default function HistoryScreen() {
   }, []);
 
   const handleItemPress = useCallback((scan: ScanResult) => {
-    const id = scan.id || scan.scanned_at || '';
-    console.log('[WoodEye] History item pressed:', scan.species, 'id:', id);
-    setExpandedId((prev) => (prev === id ? null : id));
-  }, []);
+    console.log('[WoodEye] History item pressed, navigating to detail:', scan.species);
+    router.push({ pathname: '/history-detail', params: { scan: JSON.stringify(scan) } });
+  }, [router]);
 
   const confidenceColor = (c: number) =>
     c >= 80 ? '#16A34A' : c >= 60 ? '#D97706' : COLORS.accent;
 
   const renderItem = ({ item, index }: { item: ScanResult; index: number }) => {
-    const itemId = item.id || item.scanned_at || String(index);
-    const isExpanded = expandedId === itemId;
     const dateText = formatDate(item.scanned_at);
     const confidenceNum = Number(item.confidence);
     const confColor = confidenceColor(confidenceNum);
@@ -258,52 +256,8 @@ export default function HistoryScreen() {
             </View>
           </View>
 
-          <ChevronRight
-            size={16}
-            color={textSecondary}
-            strokeWidth={2}
-            style={{ transform: [{ rotate: isExpanded ? '90deg' : '0deg' }] }}
-          />
+          <ChevronRight size={16} color={textSecondary} strokeWidth={2} />
         </Pressable>
-
-        {/* Expanded detail */}
-        {isExpanded && (
-          <View style={[styles.expandedDetail, { backgroundColor: surfaceSecondary, borderColor }]}>
-            <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: textSecondary }]}>Grain</Text>
-              <Text style={[styles.detailValue, { color: textColor }]}>{item.grain}</Text>
-            </View>
-            <View style={[styles.detailDivider, { backgroundColor: borderColor }]} />
-            <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: textSecondary }]}>Hardness</Text>
-              <Text style={[styles.detailValue, { color: textColor }]}>{item.hardness}</Text>
-            </View>
-            <View style={[styles.detailDivider, { backgroundColor: borderColor }]} />
-            <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: textSecondary }]}>Color</Text>
-              <Text style={[styles.detailValue, { color: textColor }]} numberOfLines={2}>{item.color_description}</Text>
-            </View>
-            {item.common_uses && item.common_uses.length > 0 && (
-              <>
-                <View style={[styles.detailDivider, { backgroundColor: borderColor }]} />
-                <View style={styles.detailRow}>
-                  <Text style={[styles.detailLabel, { color: textSecondary }]}>Uses</Text>
-                  <Text style={[styles.detailValue, { color: textColor }]} numberOfLines={2}>
-                    {item.common_uses.join(', ')}
-                  </Text>
-                </View>
-              </>
-            )}
-            {item.fun_fact ? (
-              <>
-                <View style={[styles.detailDivider, { backgroundColor: borderColor }]} />
-                <View style={[styles.funFactMini, { backgroundColor: isDark ? 'rgba(210,105,30,0.15)' : 'rgba(210,105,30,0.07)' }]}>
-                  <Text style={[styles.funFactMiniText, { color: textColor }]}>{item.fun_fact}</Text>
-                </View>
-              </>
-            ) : null}
-          </View>
-        )}
       </AnimatedListItem>
     );
   };

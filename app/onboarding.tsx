@@ -1,198 +1,316 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  BackHandler,
-  Pressable,
-  StyleSheet,
-  Text,
   View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
+  Text,
+  StyleSheet,
+  Pressable,
+  Animated,
+  Dimensions,
+  useColorScheme,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Leaf, Camera, Zap } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { completeOnboarding } from '@/utils/onboardingStorage';
 
-import { onboardingQuestions } from "@/constants/OnboardingQuestions";
-import { completeOnboarding } from "@/utils/onboardingStorage";
-import { ProgressBar } from "@/components/onboarding/ProgressBar";
-import { OptionCard } from "@/components/onboarding/OptionCard";
-import { useOnboardingColors } from "@/hooks/useOnboardingColors";
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const TOTAL_STEPS = onboardingQuestions.length;
+const COLORS = {
+  primary: '#8B4513',
+  accent: '#D2691E',
+  background: '#FFF8F0',
+  backgroundDark: '#1A0F0A',
+  surface: '#FFFFFF',
+  surfaceDark: '#2A1810',
+  text: '#2C1810',
+  textDark: '#F5E6D8',
+  textSecondary: '#8B6355',
+  textSecondaryDark: '#C4957A',
+};
+
+interface Step {
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  subtitle: string;
+  chips?: string[];
+  gradientColors: [string, string];
+}
+
+const STEPS: Step[] = [
+  {
+    icon: <Leaf size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    iconBg: 'rgba(255,255,255,0.25)',
+    title: 'Welcome to WoodEye',
+    subtitle: 'Identify any wood species instantly with AI. Point, shoot, and discover.',
+    gradientColors: ['#8B4513', '#D2691E'],
+  },
+  {
+    icon: <Camera size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    iconBg: 'rgba(255,255,255,0.25)',
+    title: 'Get the perfect scan',
+    subtitle: 'Hold your phone 6–12 inches from the wood surface. Focus on the grain pattern for best results.',
+    chips: ['Good lighting', 'Show the grain', 'Steady hand'],
+    gradientColors: ['#A0522D', '#CD853F'],
+  },
+  {
+    icon: <Leaf size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    iconBg: 'rgba(255,255,255,0.25)',
+    title: 'Discover every species',
+    subtitle: 'From common Oak and Maple to exotic Purpleheart and Wenge — WoodEye identifies 1000+ species worldwide.',
+    chips: ['Species name', 'Wood properties', 'Project ideas'],
+    gradientColors: ['#6B3410', '#B8621A'],
+  },
+  {
+    icon: <Zap size={48} color="#FFFFFF" strokeWidth={1.5} />,
+    iconBg: 'rgba(255,255,255,0.25)',
+    title: "You're all set!",
+    subtitle: 'Start with 4 free scans. Upgrade anytime for unlimited identification.',
+    gradientColors: ['#D2691E', '#E8892E'],
+  },
+];
+
+const TOTAL_STEPS = STEPS.length;
 
 export default function OnboardingScreen() {
-  const colors = useOnboardingColors();
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const opacity = useSharedValue(1);
+  const translateX = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const isAnimating = useRef(false);
 
-  const question = onboardingQuestions[currentStep];
-  const selectedOption = answers[currentStep];
+  const bg = isDark ? COLORS.backgroundDark : COLORS.background;
+  const textColor = isDark ? COLORS.textDark : COLORS.text;
+  const textSecondary = isDark ? COLORS.textSecondaryDark : COLORS.textSecondary;
+
+  const step = STEPS[currentStep];
   const isLastStep = currentStep === TOTAL_STEPS - 1;
-  const isFirstStep = currentStep === 0;
 
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const animateToStep = useCallback((nextStep: number) => {
+    if (isAnimating.current) return;
+    isAnimating.current = true;
 
-  const goBack = useCallback(() => {
-    if (!isFirstStep && !isAnimating.current) {
-      isAnimating.current = true;
-      opacity.value = withTiming(0, { duration: 150 });
-      setTimeout(() => {
-        setCurrentStep((prev) => Math.max(0, prev - 1));
-        opacity.value = withTiming(1, { duration: 200 });
+    const direction = nextStep > currentStep ? -1 : 1;
+
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
+      setCurrentStep(nextStep);
+      translateX.setValue(direction * 40);
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.timing(translateX, { toValue: 0, duration: 250, useNativeDriver: true }),
+      ]).start(() => {
         isAnimating.current = false;
-      }, 150);
-    }
-  }, [isFirstStep, opacity]);
-
-  useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (!isFirstStep) {
-        goBack();
-        return true;
-      }
-      return false;
+      });
     });
-    return () => sub.remove();
-  }, [isFirstStep, goBack]);
+  }, [currentStep, fadeAnim, translateX]);
 
-  const handleSelect = (optionId: string) => {
-    console.log(`[Onboarding] Selected option: ${optionId} on step ${currentStep}`);
-    setAnswers((prev) => ({ ...prev, [currentStep]: optionId }));
-  };
-
-  const handleContinue = async () => {
-    if (!selectedOption) return;
-    console.log(`[Onboarding] Continue pressed on step ${currentStep}/${TOTAL_STEPS - 1}, answer: ${selectedOption}`);
-
+  const handleNext = useCallback(async () => {
+    console.log(`[Onboarding] Next pressed on step ${currentStep}/${TOTAL_STEPS - 1}`);
     if (isLastStep) {
+      console.log('[Onboarding] Last step — completing onboarding and navigating to paywall');
       await completeOnboarding();
-      console.log('[Onboarding] Completed onboarding, navigating to paywall');
-      router.replace("/paywall");
+      router.replace('/paywall');
     } else {
-      if (isAnimating.current) return;
-      isAnimating.current = true;
-      opacity.value = withTiming(0, { duration: 150 });
-      setTimeout(() => {
-        setCurrentStep((prev) => prev + 1);
-        opacity.value = withTiming(1, { duration: 200 });
-        isAnimating.current = false;
-      }, 150);
+      animateToStep(currentStep + 1);
     }
-  };
+  }, [currentStep, isLastStep, animateToStep]);
 
-  if (!question) return null;
+  const handleSkip = useCallback(async () => {
+    console.log('[Onboarding] Skip pressed on step', currentStep);
+    await completeOnboarding();
+    router.replace('/paywall');
+  }, [currentStep]);
 
-  const optionCards = [];
-  for (const option of question.options) {
-    optionCards.push(
-      <OptionCard key={option.id} emoji={option.emoji} label={option.label} selected={selectedOption === option.id} onPress={() => handleSelect(option.id)} />
-    );
-  }
+  const buttonLabel = isLastStep ? 'Start Scanning' : 'Next';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        {!isFirstStep ? (
-          <Pressable onPress={goBack} style={styles.backButton} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-          </Pressable>
-        ) : (
-          <View style={styles.backButton} />
-        )}
-        <View style={styles.progressWrapper}>
-          <ProgressBar totalSteps={TOTAL_STEPS} currentStep={currentStep} />
-        </View>
-        <View style={styles.backButton} />
-      </View>
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      {/* Skip button */}
+      {!isLastStep && (
+        <Pressable
+          style={[styles.skipButton, { top: insets.top + 12 }]}
+          onPress={handleSkip}
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+        >
+          <Text style={[styles.skipText, { color: textSecondary }]}>Skip</Text>
+        </Pressable>
+      )}
 
-      <Animated.View style={[styles.content, animatedStyle]}>
-        <View style={styles.questionSection}>
-          <Text style={[styles.title, { color: colors.text }]}>
-            {question.title}
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.text + "99" }]}>
-            {question.subtitle}
-          </Text>
-        </View>
+      {/* Animated content */}
+      <Animated.View
+        style={[
+          styles.content,
+          { opacity: fadeAnim, transform: [{ translateX }] },
+        ]}
+      >
+        {/* Gradient hero area */}
+        <LinearGradient
+          colors={step.gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.heroGradient, { paddingTop: insets.top + 60 }]}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: step.iconBg }]}>
+            {step.icon}
+          </View>
+        </LinearGradient>
 
-        <View style={styles.optionsSection}>
-          {optionCards}
+        {/* Text content */}
+        <View style={styles.textSection}>
+          <Text style={[styles.title, { color: textColor }]}>{step.title}</Text>
+          <Text style={[styles.subtitle, { color: textSecondary }]}>{step.subtitle}</Text>
+
+          {step.chips && step.chips.length > 0 && (
+            <View style={styles.chipsRow}>
+              {step.chips.map((chip) => (
+                <View
+                  key={chip}
+                  style={[styles.chip, { backgroundColor: isDark ? 'rgba(139,69,19,0.2)' : 'rgba(139,69,19,0.08)' }]}
+                >
+                  <Text style={[styles.chipText, { color: COLORS.primary }]}>{chip}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </Animated.View>
 
-      <View style={[styles.footer, { paddingBottom: 16 }]}>
+      {/* Bottom area: dots + button */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        {/* Dot indicators */}
+        <View style={styles.dotsRow}>
+          {STEPS.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: i === currentStep ? COLORS.primary : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(139,69,19,0.2)'),
+                  width: i === currentStep ? 20 : 8,
+                },
+              ]}
+            />
+          ))}
+        </View>
+
+        {/* Next / Start Scanning button */}
         <Pressable
-          onPress={handleContinue}
-          disabled={!selectedOption}
-          style={[
-            styles.continueButton,
-            {
-              backgroundColor: colors.primary,
-              opacity: selectedOption ? 1 : 0.4,
-            },
-          ]}
+          style={styles.nextButton}
+          onPress={handleNext}
+          accessibilityRole="button"
+          accessibilityLabel={buttonLabel}
         >
-          <Text style={styles.continueText}>
-            {isLastStep ? "Get Started" : "Continue"}
-          </Text>
+          <LinearGradient
+            colors={['#D2691E', '#8B4513']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.nextGradient}
+          >
+            <Text style={styles.nextText}>{buttonLabel}</Text>
+          </LinearGradient>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  skipButton: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  progressWrapper: {
-    flex: 1,
+  skipText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
   },
-  questionSection: {
-    marginTop: 24,
-    marginBottom: 32,
+  heroGradient: {
+    alignItems: 'center',
+    paddingBottom: 48,
+  },
+  iconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderCurve: 'continuous',
+  },
+  textSection: {
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 36,
+    gap: 14,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
-    marginBottom: 8,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+    lineHeight: 36,
   },
   subtitle: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 24,
+    fontWeight: '400',
   },
-  optionsSection: {
-    flex: 1,
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   footer: {
     paddingHorizontal: 24,
+    gap: 20,
   },
-  continueButton: {
-    height: 55,
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 8,
+    borderRadius: 4,
+  },
+  nextButton: {
     borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    borderCurve: 'continuous',
   },
-  continueText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
+  nextGradient: {
+    paddingVertical: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
 });

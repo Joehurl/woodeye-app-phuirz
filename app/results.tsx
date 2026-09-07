@@ -28,7 +28,9 @@ import {
   Trees,
   Hammer,
   WifiOff,
+  Share2,
 } from 'lucide-react-native';
+import { Share } from 'react-native';
 import { isOnline, findCachedMatch } from '@/utils/woodCache';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -484,6 +486,20 @@ export default function ResultsScreen() {
     router.back();
   }, [router]);
 
+  const handleShare = useCallback(async () => {
+    if (!result) return;
+    console.log('[WoodEye] Share pressed from results for:', result.species);
+    const rotText = result.rot_resistant ? 'Yes' : 'No';
+    const usesText = (result.common_uses || []).join(', ');
+    const message = `🌳 I identified this wood with WoodEye!\n\nSpecies: ${result.species} (${result.common_name})\nOrigin: ${result.origin || 'Unknown'}\nHardness: ${result.hardness}\nRot Resistant: ${rotText}\n\nCommon uses: ${usesText}\n\nFun fact: ${result.fun_fact}\n\nIdentified with WoodEye — AI Wood Species Identifier`;
+    try {
+      await Share.share({ message });
+      console.log('[WoodEye] Share dialog opened for:', result.species);
+    } catch (e: any) {
+      console.error('[WoodEye] Share failed:', e);
+    }
+  }, [result]);
+
   const handleBuyLink = useCallback((storeName: string, url: string) => {
     console.log('[WoodEye] Buy link pressed:', storeName, '->', url);
     Linking.openURL(url);
@@ -539,24 +555,36 @@ export default function ResultsScreen() {
             <ArrowLeft size={22} color={COLORS.primary} strokeWidth={2} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: textColor }]}>Wood Analysis</Text>
-          <Pressable
-            style={styles.backButton}
-            onPress={handleToggleFavorite}
-            accessibilityRole="button"
-            accessibilityLabel={favorited ? 'Remove from favorites' : 'Add to favorites'}
-            disabled={!result || favoriteLoading}
-          >
+          <View style={styles.headerRight}>
             {result ? (
-              <Heart
-                size={22}
-                color={favorited ? '#E53E3E' : COLORS.primary}
-                strokeWidth={2}
-                fill={favorited ? '#E53E3E' : 'none'}
-              />
-            ) : (
-              <View style={{ width: 22, height: 22 }} />
-            )}
-          </Pressable>
+              <Pressable
+                style={styles.backButton}
+                onPress={handleShare}
+                accessibilityRole="button"
+                accessibilityLabel="Share this scan"
+              >
+                <Share2 size={20} color={COLORS.primary} strokeWidth={2} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              style={styles.backButton}
+              onPress={handleToggleFavorite}
+              accessibilityRole="button"
+              accessibilityLabel={favorited ? 'Remove from favorites' : 'Add to favorites'}
+              disabled={!result || favoriteLoading}
+            >
+              {result ? (
+                <Heart
+                  size={22}
+                  color={favorited ? '#E53E3E' : COLORS.primary}
+                  strokeWidth={2}
+                  fill={favorited ? '#E53E3E' : 'none'}
+                />
+              ) : (
+                <View style={{ width: 22, height: 22 }} />
+              )}
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView
@@ -908,6 +936,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     width: 40,
