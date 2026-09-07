@@ -2,7 +2,7 @@
   "expo": {
     "name": "WoodEye",
     "slug": "woodeye",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,10 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "WoodEye uses your camera to photograph wood samples for AI species identification.",
-        "NSPhotoLibraryUsageDescription": "WoodEye accesses your photo library so you can select wood photos for AI species identification."
+        "NSPhotoLibraryUsageDescription": "WoodEye accesses your photo library so you can select wood photos for AI species identification.",
+        "NSPhotoLibraryAddUsageDescription": "WoodEye saves AR wood preview captures to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "WoodEye can optionally tag your wood scan location when sharing to the community.",
+        "NSUserNotificationsUsageDescription": "WoodEye sends you a daily wood fact notification."
       }
     },
     "android": {
@@ -41,7 +44,10 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-camera",
+      "expo-media-library",
+      ["expo-notifications", { "icon": "./assets/images/icon.png", "color": "#8B4513" }]
     ],
     "scheme": "woodeye",
     "experiments": {
