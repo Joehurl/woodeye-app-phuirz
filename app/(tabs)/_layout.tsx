@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Tabs, useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, Clock, Settings } from 'lucide-react-native';
+import { Camera, Clock, Settings, Heart } from 'lucide-react-native';
 import { useSubscriptionGuard } from '@/hooks/useSubscriptionGuard';
 
 const COLORS = {
@@ -19,6 +19,7 @@ const COLORS = {
 const TABS = [
   { name: '(home)', label: 'Scan', icon: Camera },
   { name: 'history', label: 'History', icon: Clock },
+  { name: 'favorites', label: 'Favorites', icon: Heart },
   { name: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -29,6 +30,7 @@ function FloatingTabBar() {
 
   const getActiveTab = () => {
     if (pathname.startsWith('/history')) return 'history';
+    if (pathname.startsWith('/favorites')) return 'favorites';
     if (pathname.startsWith('/settings')) return 'settings';
     return '(home)';
   };
@@ -82,6 +84,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="(home)" />
       <Tabs.Screen name="history" />
+      <Tabs.Screen name="favorites" />
       <Tabs.Screen name="settings" />
     </Tabs>
   );

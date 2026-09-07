@@ -10,6 +10,7 @@ import {
   useColorScheme,
   ActivityIndicator,
   ImageSourcePropType,
+  Linking,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +23,10 @@ import {
   Zap,
   Info,
   ChevronRight,
+  Heart,
+  ExternalLink,
+  Trees,
+  Hammer,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -63,6 +68,20 @@ interface ScanResult {
   origin?: string;
   rot_resistant?: boolean;
   scanned_at?: string;
+}
+
+interface SimilarWood {
+  species: string;
+  common_name: string;
+  similarity_reason: string;
+  hardness: string;
+  origin: string;
+}
+
+interface ProjectRecommendation {
+  project: string;
+  suitability: 'excellent' | 'good' | 'fair';
+  reason: string;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -140,6 +159,29 @@ function SkeletonLine({ widthPct, height = 14 }: { widthPct: string; height?: nu
   );
 }
 
+function SectionSkeleton({ isDark }: { isDark: boolean }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const bg = isDark ? '#3A2010' : '#F5EDE4';
+  return (
+    <Animated.View style={{ opacity, gap: 10 }}>
+      <View style={{ width: '40%', height: 14, borderRadius: 7, backgroundColor: bg }} />
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ flex: 1, height: 80, borderRadius: 12, backgroundColor: bg }} />
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -150,6 +192,15 @@ export default function ResultsScreen() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [similarWoods, setSimilarWoods] = useState<SimilarWood[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+
+  const [recommendations, setRecommendations] = useState<ProjectRecommendation[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
+
+  const [favorited, setFavorited] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -163,6 +214,95 @@ export default function ResultsScreen() {
   useEffect(() => {
     identifyWood();
   }, []);
+
+  const fetchSimilarWoods = async (species: string, common_name: string) => {
+    setSimilarLoading(true);
+    console.log('[WoodEye] Fetching similar woods for:', species);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-similar-woods`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ species, common_name }),
+      });
+      console.log('[WoodEye] get-similar-woods response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] get-similar-woods error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Similar woods loaded:', data.similar?.length ?? 0);
+      setSimilarWoods(data.similar || []);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to fetch similar woods:', e);
+    } finally {
+      setSimilarLoading(false);
+    }
+  };
+
+  const fetchRecommendations = async (scan: ScanResult) => {
+    setRecsLoading(true);
+    console.log('[WoodEye] Fetching project recommendations for:', scan.species);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-project-recommendations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          species: scan.species,
+          common_name: scan.common_name,
+          hardness: scan.hardness,
+          rot_resistant: scan.rot_resistant,
+          grain: scan.grain,
+        }),
+      });
+      console.log('[WoodEye] get-project-recommendations response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] get-project-recommendations error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Project recommendations loaded:', data.recommendations?.length ?? 0);
+      setRecommendations(data.recommendations || []);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to fetch project recommendations:', e);
+    } finally {
+      setRecsLoading(false);
+    }
+  };
+
+  const checkFavoriteStatus = async (species: string) => {
+    try {
+      const deviceId = await getOrCreateDeviceId();
+      console.log('[WoodEye] Checking favorite status for:', species);
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/get-favorites?device_id=${encodeURIComponent(deviceId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+        }
+      );
+      console.log('[WoodEye] get-favorites response status:', response.status);
+      if (!response.ok) return;
+      const data = await response.json();
+      const favs: { species: string }[] = data.favorites || [];
+      const isFav = favs.some((f) => f.species === species);
+      console.log('[WoodEye] Is favorited:', isFav);
+      setFavorited(isFav);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to check favorite status:', e);
+    }
+  };
 
   const identifyWood = async () => {
     setLoading(true);
@@ -200,6 +340,11 @@ export default function ResultsScreen() {
 
       setResult(data);
 
+      // Kick off secondary fetches in parallel
+      fetchSimilarWoods(data.species, data.common_name);
+      fetchRecommendations(data);
+      checkFavoriteStatus(data.species);
+
       // Increment scan count
       const stored = await AsyncStorage.getItem(SCAN_COUNT_KEY);
       const count = stored ? parseInt(stored, 10) : 0;
@@ -220,6 +365,44 @@ export default function ResultsScreen() {
     }
   };
 
+  const handleToggleFavorite = useCallback(async () => {
+    if (!result || favoriteLoading) return;
+    console.log('[WoodEye] Toggle favorite pressed for:', result.species, '- currently favorited:', favorited);
+    setFavoriteLoading(true);
+    try {
+      const deviceId = await getOrCreateDeviceId();
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/toggle-favorite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          device_id: deviceId,
+          species: result.species,
+          common_name: result.common_name,
+          hardness: result.hardness,
+          origin: result.origin,
+          rot_resistant: result.rot_resistant,
+        }),
+      });
+      console.log('[WoodEye] toggle-favorite response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] toggle-favorite error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Favorite toggled, new state:', data.favorited);
+      setFavorited(data.favorited);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to toggle favorite:', e);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }, [result, favorited, favoriteLoading]);
+
   const handleScanAgain = useCallback(() => {
     console.log('[WoodEye] Scan Again pressed');
     router.back();
@@ -229,6 +412,41 @@ export default function ResultsScreen() {
     console.log('[WoodEye] Back pressed from results');
     router.back();
   }, [router]);
+
+  const handleBuyLink = useCallback((storeName: string, url: string) => {
+    console.log('[WoodEye] Buy link pressed:', storeName, '->', url);
+    Linking.openURL(url);
+  }, []);
+
+  const suitabilityColor = (s: ProjectRecommendation['suitability']) => {
+    if (s === 'excellent') return COLORS.success;
+    if (s === 'good') return COLORS.warning;
+    return textSecondary;
+  };
+
+  const suitabilityBg = (s: ProjectRecommendation['suitability']) => {
+    if (s === 'excellent') return isDark ? 'rgba(22,163,74,0.2)' : 'rgba(22,163,74,0.1)';
+    if (s === 'good') return isDark ? 'rgba(217,119,6,0.2)' : 'rgba(217,119,6,0.1)';
+    return isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  };
+
+  const commonNameEncoded = result ? encodeURIComponent(result.common_name) : '';
+  const commonNameLumberEncoded = result ? encodeURIComponent(result.common_name + ' wood lumber') : '';
+
+  const buyLinks = [
+    {
+      name: 'Woodcraft',
+      url: `https://www.woodcraft.com/search?q=${commonNameEncoded}`,
+    },
+    {
+      name: 'Rockler',
+      url: `https://www.rockler.com/search#w=${commonNameEncoded}`,
+    },
+    {
+      name: 'Amazon',
+      url: `https://www.amazon.com/s?k=${commonNameLumberEncoded}`,
+    },
+  ];
 
   return (
     <>
@@ -250,7 +468,24 @@ export default function ResultsScreen() {
             <ArrowLeft size={22} color={COLORS.primary} strokeWidth={2} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: textColor }]}>Wood Analysis</Text>
-          <View style={styles.backButton} />
+          <Pressable
+            style={styles.backButton}
+            onPress={handleToggleFavorite}
+            accessibilityRole="button"
+            accessibilityLabel={favorited ? 'Remove from favorites' : 'Add to favorites'}
+            disabled={!result || favoriteLoading}
+          >
+            {result ? (
+              <Heart
+                size={22}
+                color={favorited ? '#E53E3E' : COLORS.primary}
+                strokeWidth={2}
+                fill={favorited ? '#E53E3E' : 'none'}
+              />
+            ) : (
+              <View style={{ width: 22, height: 22 }} />
+            )}
+          </Pressable>
         </View>
 
         <ScrollView
@@ -404,6 +639,111 @@ export default function ResultsScreen() {
                   </LinearGradient>
                 </View>
               ) : null}
+
+              {/* Similar Woods */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <Trees size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Similar Woods</Text>
+                </View>
+                {similarLoading ? (
+                  <SectionSkeleton isDark={isDark} />
+                ) : similarWoods.length > 0 ? (
+                  <View style={styles.similarGrid}>
+                    {similarWoods.slice(0, 3).map((wood, i) => (
+                      <View
+                        key={i}
+                        style={[styles.similarCard, { backgroundColor: surfaceSecondary, borderColor }]}
+                      >
+                        <Text style={[styles.similarSpecies, { color: textColor }]} numberOfLines={2}>
+                          {wood.species}
+                        </Text>
+                        <Text style={[styles.similarCommon, { color: textSecondary }]} numberOfLines={1}>
+                          {wood.common_name}
+                        </Text>
+                        <View style={[styles.similarDivider, { backgroundColor: borderColor }]} />
+                        <Text style={[styles.similarReason, { color: textSecondary }]} numberOfLines={3}>
+                          {wood.similarity_reason}
+                        </Text>
+                        <View style={styles.similarMeta}>
+                          <Text style={[styles.similarMetaText, { color: COLORS.primary }]}>
+                            {wood.hardness}
+                          </Text>
+                          <Text style={[styles.similarMetaDot, { color: textSecondary }]}>·</Text>
+                          <Text style={[styles.similarMetaText, { color: textSecondary }]} numberOfLines={1}>
+                            {wood.origin}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyHint, { color: textSecondary }]}>No similar woods found</Text>
+                )}
+              </View>
+
+              {/* Project Recommendations */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <Hammer size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Best For</Text>
+                </View>
+                {recsLoading ? (
+                  <SectionSkeleton isDark={isDark} />
+                ) : recommendations.length > 0 ? (
+                  <View style={styles.recsGrid}>
+                    {recommendations.map((rec, i) => {
+                      const sColor = suitabilityColor(rec.suitability);
+                      const sBg = suitabilityBg(rec.suitability);
+                      const sLabel = rec.suitability.charAt(0).toUpperCase() + rec.suitability.slice(1);
+                      return (
+                        <View
+                          key={i}
+                          style={[styles.recCard, { backgroundColor: surfaceSecondary, borderColor }]}
+                        >
+                          <View style={styles.recHeader}>
+                            <Text style={[styles.recProject, { color: textColor }]} numberOfLines={1}>
+                              {rec.project}
+                            </Text>
+                            <View style={[styles.suitabilityBadge, { backgroundColor: sBg }]}>
+                              <Text style={[styles.suitabilityText, { color: sColor }]}>
+                                {sLabel}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={[styles.recReason, { color: textSecondary }]} numberOfLines={2}>
+                            {rec.reason}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyHint, { color: textSecondary }]}>No recommendations found</Text>
+                )}
+              </View>
+
+              {/* Where to Buy */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <ExternalLink size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Where to Buy</Text>
+                </View>
+                <View style={styles.buyRow}>
+                  {buyLinks.map((link) => (
+                    <Pressable
+                      key={link.name}
+                      style={[styles.buyChip, { backgroundColor: isDark ? 'rgba(139,69,19,0.2)' : 'rgba(139,69,19,0.08)', borderColor }]}
+                      onPress={() => handleBuyLink(link.name, link.url)}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Search ${link.name} for ${result.common_name}`}
+                    >
+                      <Text style={[styles.buyChipText, { color: COLORS.primary }]}>{link.name}</Text>
+                      <ExternalLink size={12} color={COLORS.primary} strokeWidth={2} />
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             </Animated.View>
           )}
         </ScrollView>
@@ -716,6 +1056,127 @@ const styles = StyleSheet.create({
   funFactText: {
     fontSize: 14,
     lineHeight: 21,
+  },
+  // Shared section card
+  sectionCard: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 14,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyHint: {
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  // Similar woods
+  similarGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  similarCard: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+  },
+  similarSpecies: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+    lineHeight: 17,
+  },
+  similarCommon: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  similarDivider: {
+    height: 1,
+    opacity: 0.4,
+  },
+  similarReason: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  similarMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  similarMetaText: {
+    fontSize: 10,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  similarMetaDot: {
+    fontSize: 10,
+  },
+  // Project recommendations
+  recsGrid: {
+    gap: 8,
+  },
+  recCard: {
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+  },
+  recHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  recProject: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+    letterSpacing: -0.1,
+  },
+  suitabilityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderCurve: 'continuous',
+  },
+  suitabilityText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  recReason: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  // Where to buy
+  buyRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  buyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+  },
+  buyChipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   bottomBar: {
     paddingHorizontal: 16,

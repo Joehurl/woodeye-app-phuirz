@@ -14,6 +14,9 @@ export default function TabLayout() {
       <NativeTabs.Trigger name="history" label="History">
         <IconSymbol name="clock.fill" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="favorites" label="Favorites">
+        <IconSymbol name="heart.fill" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings" label="Settings">
         <IconSymbol name="gearshape.fill" />
       </NativeTabs.Trigger>
