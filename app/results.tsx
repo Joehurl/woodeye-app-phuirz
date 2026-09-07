@@ -60,6 +60,8 @@ interface ScanResult {
   color_description: string;
   common_uses: string[];
   fun_fact: string;
+  origin?: string;
+  rot_resistant?: boolean;
   scanned_at?: string;
 }
 
@@ -346,10 +348,31 @@ export default function ResultsScreen() {
                     <Text style={[styles.propertyValue, { color: textColor }]}>{result.hardness}</Text>
                   </View>
                 </View>
+                {result.origin && result.origin !== 'unknown' ? (
+                  <View style={[styles.colorRow, { backgroundColor: surfaceSecondary }]}>
+                    <Text style={[styles.propertyLabel, { color: textSecondary }]}>Origin</Text>
+                    <Text style={[styles.propertyValue, { color: textColor }]}>{result.origin}</Text>
+                  </View>
+                ) : null}
                 <View style={[styles.colorRow, { backgroundColor: surfaceSecondary }]}>
                   <Text style={[styles.propertyLabel, { color: textSecondary }]}>Color</Text>
                   <Text style={[styles.propertyValue, { color: textColor }]}>{result.color_description}</Text>
                 </View>
+                {result.rot_resistant !== undefined ? (
+                  <View style={[
+                    styles.rotBadge,
+                    { backgroundColor: result.rot_resistant
+                        ? (isDark ? 'rgba(22,163,74,0.2)' : 'rgba(22,163,74,0.1)')
+                        : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') }
+                  ]}>
+                    <Text style={[
+                      styles.rotBadgeText,
+                      { color: result.rot_resistant ? COLORS.success : textSecondary }
+                    ]}>
+                      {result.rot_resistant ? 'Rot Resistant ✓' : 'Not Rot Resistant'}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* Common uses */}
@@ -637,6 +660,16 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 4,
     borderCurve: 'continuous',
+  },
+  rotBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
+  rotBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   usesCard: {
     borderRadius: 16,
