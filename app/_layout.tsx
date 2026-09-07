@@ -148,6 +148,7 @@ export default function RootLayout() {
                 <Stack.Screen name="results" options={{ headerShown: false, presentation: 'card' }} />
                 <Stack.Screen name="paywall" options={{ headerShown: false }} />
                 <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
+                <Stack.Screen name="species-library" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style={"auto"} />
               </GestureHandlerRootView>

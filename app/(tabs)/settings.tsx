@@ -19,6 +19,8 @@ import {
   Leaf,
   Star,
   RefreshCw,
+  BookOpen,
+  WifiOff,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -114,6 +116,11 @@ export default function SettingsScreen() {
   const handleUpgrade = useCallback(() => {
     console.log('[WoodEye] Upgrade to Premium pressed from settings');
     router.push('/paywall');
+  }, [router]);
+
+  const handleSpeciesLibrary = useCallback(() => {
+    console.log('[WoodEye] Species Library pressed from settings');
+    router.push('/species-library');
   }, [router]);
 
   const handleManageSubscription = useCallback(() => {
@@ -238,6 +245,35 @@ export default function SettingsScreen() {
               label="Restore purchases"
               sublabel="Recover a previous subscription"
               onPress={handleRestorePurchases}
+              isDark={isDark}
+              textColor={textColor}
+              textSecondary={textSecondary}
+              surfaceColor={surfaceColor}
+              borderColor={borderColor}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* Offline & Library section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: textSecondary }]}>Offline &amp; Library</Text>
+          <View style={[styles.settingsGroup, { borderColor }]}>
+            <SettingsRow
+              icon={<BookOpen size={18} color={COLORS.primary} strokeWidth={2} />}
+              label="Species Library"
+              sublabel="Explore 40+ species anytime, even offline"
+              onPress={handleSpeciesLibrary}
+              isDark={isDark}
+              textColor={textColor}
+              textSecondary={textSecondary}
+              surfaceColor={surfaceColor}
+              borderColor={borderColor}
+            />
+            <SettingsRow
+              icon={<WifiOff size={18} color={COLORS.primary} strokeWidth={2} />}
+              label="Offline Mode"
+              sublabel="Species library works without internet"
               isDark={isDark}
               textColor={textColor}
               textSecondary={textSecondary}

@@ -27,11 +27,16 @@ import {
   ExternalLink,
   Trees,
   Hammer,
+  WifiOff,
 } from 'lucide-react-native';
+import { isOnline, findCachedMatch } from '@/utils/woodCache';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const SCAN_COUNT_KEY = 'woodeye_scan_count';
 const DEVICE_ID_KEY = 'woodeye_device_id';
+const USER_CACHE_KEY_PREFIX = 'woodeye_cache_';
+const USER_CACHE_INDEX_KEY = 'woodeye_cache_index';
+const USER_CACHE_MAX = 20;
 const SUPABASE_URL = 'https://owcjjbrmmjgwfrhysavz.supabase.co';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93Y2pqYnJtbWpnd2ZyaHlzYXZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NTU4NDcsImV4cCI6MjEwNDAzMTg0N30.eLkFGUDF17ax1upsCOaScq85ljdzW-_tG74JAO7iJrY';
@@ -192,6 +197,8 @@ export default function ResultsScreen() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+  const [isCachedResult, setIsCachedResult] = useState(false);
 
   const [similarWoods, setSimilarWoods] = useState<SimilarWood[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
@@ -304,12 +311,63 @@ export default function ResultsScreen() {
     }
   };
 
+  const cacheUserResult = async (data: ScanResult) => {
+    try {
+      const key = `${USER_CACHE_KEY_PREFIX}${data.species.replace(/\s+/g, '_').toLowerCase()}`;
+      await AsyncStorage.setItem(key, JSON.stringify(data));
+      // Maintain a rolling index of cached species keys
+      const indexRaw = await AsyncStorage.getItem(USER_CACHE_INDEX_KEY);
+      const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
+      const updated = [key, ...index.filter((k) => k !== key)].slice(0, USER_CACHE_MAX);
+      await AsyncStorage.setItem(USER_CACHE_INDEX_KEY, JSON.stringify(updated));
+      console.log('[WoodEye] Cached scan result for:', data.species, '- total cached:', updated.length);
+    } catch (e) {
+      console.warn('[WoodEye] Failed to cache scan result:', e);
+    }
+  };
+
   const identifyWood = async () => {
     setLoading(true);
     setError(null);
+    setIsOffline(false);
+    setIsCachedResult(false);
     console.log('[WoodEye] Starting wood identification...');
 
     try {
+      // ── Offline check ────────────────────────────────────────────────────────
+      const online = await isOnline();
+      if (!online) {
+        console.log('[WoodEye] Device is offline — attempting cached match');
+        setIsOffline(true);
+        const cached = findCachedMatch();
+        if (cached) {
+          console.log('[WoodEye] Serving cached result:', cached.common_name);
+          setResult({
+            species: cached.species,
+            common_name: cached.common_name,
+            confidence: cached.confidence,
+            grain: cached.grain,
+            hardness: cached.hardness,
+            color_description: cached.color_description,
+            common_uses: cached.common_uses,
+            fun_fact: cached.fun_fact,
+            origin: cached.origin,
+            rot_resistant: cached.rot_resistant,
+          });
+          setIsCachedResult(true);
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }).start();
+        } else {
+          console.log('[WoodEye] No cached match available — showing offline no-match UI');
+          // Leave result null; offline + no result → offline card rendered below
+        }
+        return;
+      }
+
+      // ── Online path ──────────────────────────────────────────────────────────
       const deviceId = await getOrCreateDeviceId();
       console.log('[WoodEye] Device ID:', deviceId);
       console.log('[WoodEye] Sending identify-wood request to Supabase edge function');
@@ -339,6 +397,9 @@ export default function ResultsScreen() {
       console.log('[WoodEye] Identification result:', data.species, '- confidence:', data.confidence);
 
       setResult(data);
+
+      // Cache the successful result for future offline use
+      cacheUserResult(data);
 
       // Kick off secondary fetches in parallel
       fetchSimilarWoods(data.species, data.common_name);
@@ -402,6 +463,16 @@ export default function ResultsScreen() {
       setFavoriteLoading(false);
     }
   }, [result, favorited, favoriteLoading]);
+
+  const handleBrowseLibrary = useCallback(() => {
+    console.log('[WoodEye] Browse Species Library pressed from offline screen');
+    router.push('/species-library');
+  }, [router]);
+
+  const handleTryAgain = useCallback(() => {
+    console.log('[WoodEye] Try Again pressed from offline screen');
+    identifyWood();
+  }, []);
 
   const handleScanAgain = useCallback(() => {
     console.log('[WoodEye] Scan Again pressed');
@@ -545,9 +616,61 @@ export default function ResultsScreen() {
             </View>
           )}
 
+          {/* Offline + no match state */}
+          {isOffline && !result && !loading && (
+            <View style={[styles.offlineCard, { backgroundColor: surfaceColor, borderColor }]}>
+              <View style={styles.offlineIconWrap}>
+                <WifiOff size={32} color={COLORS.warning} strokeWidth={1.5} />
+              </View>
+              <Text style={[styles.offlineTitle, { color: textColor }]}>You're offline</Text>
+              <Text style={[styles.offlineMessage, { color: textSecondary }]}>
+                WoodEye needs an internet connection to identify wood with AI. Connect to Wi-Fi or cellular to scan.
+              </Text>
+              <Pressable
+                style={styles.browseLibraryButton}
+                onPress={handleBrowseLibrary}
+                accessibilityRole="button"
+                accessibilityLabel="Browse Species Library"
+              >
+                <LinearGradient
+                  colors={['#D2691E', '#8B4513']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.browseLibraryGradient}
+                >
+                  <Leaf size={16} color="#FFFFFF" strokeWidth={2} />
+                  <Text style={styles.browseLibraryText}>Browse Species Library</Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                style={[styles.tryAgainButton, { borderColor }]}
+                onPress={handleTryAgain}
+                accessibilityRole="button"
+                accessibilityLabel="Try Again"
+              >
+                <Text style={[styles.tryAgainText, { color: textSecondary }]}>Try Again</Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Results */}
           {result && !loading && (
             <Animated.View style={{ opacity: fadeAnim, gap: 16 }}>
+              {/* Offline cached result badge */}
+              {isCachedResult && (
+                <View style={styles.cachedBadgeRow}>
+                  <View style={styles.cachedBadge}>
+                    <WifiOff size={12} color={COLORS.warning} strokeWidth={2} />
+                    <Text style={[styles.cachedBadgeText, { color: COLORS.warning }]}>
+                      Offline · Cached Result
+                    </Text>
+                  </View>
+                  <Text style={[styles.cachedBadgeNote, { color: textSecondary }]}>
+                    Connect to internet for AI-powered identification
+                  </Text>
+                </View>
+              )}
+
               {/* Species header */}
               <View style={[styles.speciesCard, { backgroundColor: surfaceColor, borderColor }]}>
                 <LinearGradient
@@ -1177,6 +1300,91 @@ const styles = StyleSheet.create({
   buyChipText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  // Offline no-match card
+  offlineCard: {
+    borderRadius: 16,
+    padding: 28,
+    alignItems: 'center',
+    gap: 14,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+  },
+  offlineIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: 'rgba(217,119,6,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderCurve: 'continuous',
+  },
+  offlineTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  offlineMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 21,
+    paddingHorizontal: 8,
+  },
+  browseLibraryButton: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    width: '100%',
+    borderCurve: 'continuous',
+  },
+  browseLibraryGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    gap: 8,
+  },
+  browseLibraryText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  tryAgainButton: {
+    width: '100%',
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    borderCurve: 'continuous',
+  },
+  tryAgainText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // Cached result badge
+  cachedBadgeRow: {
+    gap: 4,
+  },
+  cachedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(217,119,6,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderCurve: 'continuous',
+  },
+  cachedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  cachedBadgeNote: {
+    fontSize: 12,
+    fontWeight: '400',
+    paddingHorizontal: 2,
   },
   bottomBar: {
     paddingHorizontal: 16,
