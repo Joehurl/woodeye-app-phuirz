@@ -67,8 +67,8 @@ export default function OnboardingScreen() {
 
     if (isLastStep) {
       await completeOnboarding();
-      console.log('[Onboarding] Completed onboarding, navigating to tabs');
-      router.replace("/(tabs)");
+      console.log('[Onboarding] Completed onboarding, navigating to paywall');
+      router.replace("/paywall");
     } else {
       if (isAnimating.current) return;
       isAnimating.current = true;
