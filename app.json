@@ -48,7 +48,13 @@
       "expo-secure-store",
       "expo-camera",
       "expo-media-library",
-      ["expo-notifications", { "icon": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg", "color": "#8B4513" }]
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg",
+          "color": "#8B4513"
+        }
+      ]
     ],
     "scheme": "woodeye",
     "experiments": {
