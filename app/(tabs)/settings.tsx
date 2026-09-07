@@ -25,6 +25,8 @@ import {
   WifiOff,
   GitCompare,
   Bell,
+  Calculator,
+  Layers,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -197,6 +199,16 @@ export default function SettingsScreen() {
     router.push('/compare');
   }, [router]);
 
+  const handleBoardFootCalculator = useCallback(() => {
+    console.log('[WoodEye] Board Foot Calculator pressed from settings');
+    router.push('/board-foot-calculator');
+  }, [router]);
+
+  const handleARVisualizer = useCallback(() => {
+    console.log('[WoodEye] AR Wood Preview pressed from settings');
+    router.push('/ar-visualizer');
+  }, [router]);
+
   const handleManageSubscription = useCallback(() => {
     console.log('[WoodEye] Manage Subscription pressed');
     Linking.openURL('https://apps.apple.com/account/subscriptions');
@@ -349,6 +361,28 @@ export default function SettingsScreen() {
               label="Compare Woods"
               sublabel="Side-by-side species comparison"
               onPress={handleCompare}
+              isDark={isDark}
+              textColor={textColor}
+              textSecondary={textSecondary}
+              surfaceColor={surfaceColor}
+              borderColor={borderColor}
+            />
+            <SettingsRow
+              icon={<Calculator size={18} color={COLORS.primary} strokeWidth={2} />}
+              label="Board Foot Calculator"
+              sublabel="Calculate lumber volume and project cost"
+              onPress={handleBoardFootCalculator}
+              isDark={isDark}
+              textColor={textColor}
+              textSecondary={textSecondary}
+              surfaceColor={surfaceColor}
+              borderColor={borderColor}
+            />
+            <SettingsRow
+              icon={<Layers size={18} color={COLORS.primary} strokeWidth={2} />}
+              label="AR Wood Preview"
+              sublabel="Preview wood tones on any surface"
+              onPress={handleARVisualizer}
               isDark={isDark}
               textColor={textColor}
               textSecondary={textSecondary}

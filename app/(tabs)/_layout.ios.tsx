@@ -17,6 +17,9 @@ export default function TabLayout() {
       <NativeTabs.Trigger name="favorites" label="Favorites">
         <IconSymbol name="heart.fill" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="community" label="Community">
+        <IconSymbol name="person.2.fill" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings" label="Settings">
         <IconSymbol name="gearshape.fill" />
       </NativeTabs.Trigger>

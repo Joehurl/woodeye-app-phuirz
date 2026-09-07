@@ -151,6 +151,8 @@ export default function RootLayout() {
                 <Stack.Screen name="species-library" options={{ headerShown: false }} />
                 <Stack.Screen name="history-detail" options={{ headerShown: false }} />
                 <Stack.Screen name="compare" options={{ headerShown: false }} />
+                <Stack.Screen name="board-foot-calculator" options={{ headerShown: false }} />
+                <Stack.Screen name="ar-visualizer" options={{ headerShown: false }} />
               </Stack>
               <SystemBars style={"auto"} />
               </GestureHandlerRootView>

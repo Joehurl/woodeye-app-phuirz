@@ -11,6 +11,9 @@ import {
   ActivityIndicator,
   ImageSourcePropType,
   Linking,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +32,13 @@ import {
   Hammer,
   WifiOff,
   Share2,
+  AlertTriangle,
+  Droplets,
+  Award,
+  Wrench,
+  DollarSign,
+  Users,
+  Calculator,
 } from 'lucide-react-native';
 import { Share } from 'react-native';
 import { isOnline, findCachedMatch } from '@/utils/woodCache';
@@ -62,6 +72,17 @@ const COLORS = {
   warning: '#D97706',
 };
 
+// CITES-listed species
+const CITES_SPECIES: Record<string, { listing: string; restriction: string }> = {
+  'Dalbergia nigra': { listing: 'CITES Appendix I', restriction: 'Commercial trade prohibited' },
+  'Dalbergia retusa': { listing: 'CITES Appendix II', restriction: 'Export permits required' },
+  'Diospyros crassiflora': { listing: 'CITES Appendix II', restriction: 'Export permits required' },
+  'Swietenia macrophylla': { listing: 'CITES Appendix II', restriction: 'Export permits required' },
+  'Guaiacum officinale': { listing: 'CITES Appendix II', restriction: 'Export permits required' },
+  'Aquilaria malaccensis': { listing: 'CITES Appendix II', restriction: 'Export permits required' },
+  'Pericopsis elata': { listing: 'CITES Appendix II', restriction: 'Export permits required' },
+};
+
 interface ScanResult {
   id?: string;
   species: string;
@@ -89,6 +110,36 @@ interface ProjectRecommendation {
   project: string;
   suitability: 'excellent' | 'good' | 'fair';
   reason: string;
+}
+
+interface WoodGradeResult {
+  grade: string;
+  grain_consistency: string;
+  defects: string[];
+  recommended_use: string;
+}
+
+interface MoistureResult {
+  moisture_status: string;
+  estimated_mc_percent: number;
+  is_ready_for_use: boolean;
+  drying_time_estimate: string;
+  tips: string[];
+}
+
+interface JoineryResult {
+  difficulty: string;
+  best_joinery: { method: string; reason: string }[];
+  finishing: { finish: string; result: string }[];
+  tool_tips: string;
+}
+
+interface LumberPricesResult {
+  price_range: string;
+  availability: string;
+  price_note: string;
+  suppliers: string[];
+  price_per_bf?: number;
 }
 
 function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
@@ -149,6 +200,44 @@ function ConfidenceBar({ confidence, isDark }: { confidence: number; isDark: boo
   );
 }
 
+function MoistureBar({ percent, isDark }: { percent: number; isDark: boolean }) {
+  const widthAnim = useRef(new Animated.Value(0)).current;
+  const clampedPct = Math.min(Math.max(Number(percent) || 0, 0), 30);
+
+  useEffect(() => {
+    Animated.timing(widthAnim, {
+      toValue: clampedPct,
+      duration: 800,
+      delay: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [clampedPct]);
+
+  const barColor = clampedPct <= 9 ? COLORS.success : clampedPct <= 15 ? COLORS.warning : '#EA580C';
+
+  return (
+    <View style={styles.confidenceContainer}>
+      <View style={[styles.confidenceTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+        <Animated.View
+          style={[
+            styles.confidenceFill,
+            {
+              backgroundColor: barColor,
+              width: widthAnim.interpolate({
+                inputRange: [0, 30],
+                outputRange: ['0%', '100%'],
+              }),
+            },
+          ]}
+        />
+      </View>
+      <Text style={[styles.confidenceLabel, { color: barColor }]}>
+        {clampedPct}%
+      </Text>
+    </View>
+  );
+}
+
 function SkeletonLine({ widthPct, height = 14 }: { widthPct: string; height?: number }) {
   const opacity = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
@@ -189,6 +278,54 @@ function SectionSkeleton({ isDark }: { isDark: boolean }) {
   );
 }
 
+function CardSkeleton({ isDark }: { isDark: boolean }) {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  const bg = isDark ? '#3A2010' : '#F5EDE4';
+  return (
+    <Animated.View style={{ opacity, gap: 10 }}>
+      <View style={{ width: '60%', height: 14, borderRadius: 7, backgroundColor: bg }} />
+      <View style={{ width: '100%', height: 12, borderRadius: 6, backgroundColor: bg }} />
+      <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: bg }} />
+      <View style={{ width: '90%', height: 12, borderRadius: 6, backgroundColor: bg }} />
+    </Animated.View>
+  );
+}
+
+function gradeColor(grade: string): string {
+  if (grade === 'Select') return COLORS.success;
+  if (grade === '#1 Common') return COLORS.warning;
+  if (grade === '#2 Common') return '#EA580C';
+  return '#DC2626';
+}
+
+function moistureStatusColor(status: string): string {
+  if (status === 'Kiln Dried') return COLORS.success;
+  if (status === 'Air Dried') return COLORS.warning;
+  if (status === 'Partially Dried') return '#EA580C';
+  return '#DC2626';
+}
+
+function difficultyColor(difficulty: string): string {
+  if (difficulty === 'Beginner') return COLORS.success;
+  if (difficulty === 'Intermediate') return COLORS.warning;
+  return '#DC2626';
+}
+
+function availabilityColor(availability: string): string {
+  if (availability === 'Widely Available') return COLORS.success;
+  if (availability === 'Moderately Available') return COLORS.warning;
+  if (availability === 'Specialty Only') return '#EA580C';
+  return '#DC2626';
+}
+
 export default function ResultsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -210,6 +347,24 @@ export default function ResultsScreen() {
 
   const [favorited, setFavorited] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  // New feature states
+  const [woodGrade, setWoodGrade] = useState<WoodGradeResult | null>(null);
+  const [woodGradeLoading, setWoodGradeLoading] = useState(false);
+
+  const [moisture, setMoisture] = useState<MoistureResult | null>(null);
+  const [moistureLoading, setMoistureLoading] = useState(false);
+
+  const [joinery, setJoinery] = useState<JoineryResult | null>(null);
+  const [joineryLoading, setJoineryLoading] = useState(false);
+
+  const [lumberPrices, setLumberPrices] = useState<LumberPricesResult | null>(null);
+  const [lumberLoading, setLumberLoading] = useState(false);
+
+  // Community share modal
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [shareLocation, setShareLocation] = useState('');
+  const [sharePosting, setSharePosting] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -288,6 +443,139 @@ export default function ResultsScreen() {
     }
   };
 
+  const fetchWoodGrade = async (scan: ScanResult) => {
+    setWoodGradeLoading(true);
+    console.log('[WoodEye] Fetching wood grade for:', scan.species);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/analyze-wood-grade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+          species: scan.species,
+          common_name: scan.common_name,
+        }),
+      });
+      console.log('[WoodEye] analyze-wood-grade response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] analyze-wood-grade error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Wood grade loaded:', data.grade);
+      setWoodGrade(data);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to fetch wood grade:', e);
+    } finally {
+      setWoodGradeLoading(false);
+    }
+  };
+
+  const fetchMoisture = async (scan: ScanResult) => {
+    setMoistureLoading(true);
+    console.log('[WoodEye] Fetching moisture analysis for:', scan.species);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/analyze-moisture`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+          species: scan.species,
+          common_name: scan.common_name,
+        }),
+      });
+      console.log('[WoodEye] analyze-moisture response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] analyze-moisture error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Moisture loaded:', data.moisture_status, data.estimated_mc_percent);
+      setMoisture(data);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to fetch moisture:', e);
+    } finally {
+      setMoistureLoading(false);
+    }
+  };
+
+  const fetchJoinery = async (scan: ScanResult) => {
+    setJoineryLoading(true);
+    console.log('[WoodEye] Fetching joinery guide for:', scan.species);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-joinery-guide`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          species: scan.species,
+          common_name: scan.common_name,
+          hardness: scan.hardness,
+          grain: scan.grain,
+        }),
+      });
+      console.log('[WoodEye] get-joinery-guide response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] get-joinery-guide error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Joinery guide loaded, difficulty:', data.difficulty);
+      setJoinery(data);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to fetch joinery guide:', e);
+    } finally {
+      setJoineryLoading(false);
+    }
+  };
+
+  const fetchLumberPrices = async (scan: ScanResult) => {
+    setLumberLoading(true);
+    console.log('[WoodEye] Fetching lumber prices for:', scan.species);
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-lumber-prices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          species: scan.species,
+          common_name: scan.common_name,
+          hardness: scan.hardness,
+        }),
+      });
+      console.log('[WoodEye] get-lumber-prices response status:', response.status);
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[WoodEye] get-lumber-prices error:', errText);
+        return;
+      }
+      const data = await response.json();
+      console.log('[WoodEye] Lumber prices loaded:', data.price_range, data.availability);
+      setLumberPrices(data);
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to fetch lumber prices:', e);
+    } finally {
+      setLumberLoading(false);
+    }
+  };
+
   const checkFavoriteStatus = async (species: string) => {
     try {
       const deviceId = await getOrCreateDeviceId();
@@ -317,7 +605,6 @@ export default function ResultsScreen() {
     try {
       const key = `${USER_CACHE_KEY_PREFIX}${data.species.replace(/\s+/g, '_').toLowerCase()}`;
       await AsyncStorage.setItem(key, JSON.stringify(data));
-      // Maintain a rolling index of cached species keys
       const indexRaw = await AsyncStorage.getItem(USER_CACHE_INDEX_KEY);
       const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
       const updated = [key, ...index.filter((k) => k !== key)].slice(0, USER_CACHE_MAX);
@@ -336,7 +623,6 @@ export default function ResultsScreen() {
     console.log('[WoodEye] Starting wood identification...');
 
     try {
-      // ── Offline check ────────────────────────────────────────────────────────
       const online = await isOnline();
       if (!online) {
         console.log('[WoodEye] Device is offline — attempting cached match');
@@ -364,12 +650,10 @@ export default function ResultsScreen() {
           }).start();
         } else {
           console.log('[WoodEye] No cached match available — showing offline no-match UI');
-          // Leave result null; offline + no result → offline card rendered below
         }
         return;
       }
 
-      // ── Online path ──────────────────────────────────────────────────────────
       const deviceId = await getOrCreateDeviceId();
       console.log('[WoodEye] Device ID:', deviceId);
       console.log('[WoodEye] Sending identify-wood request to Supabase edge function');
@@ -399,16 +683,17 @@ export default function ResultsScreen() {
       console.log('[WoodEye] Identification result:', data.species, '- confidence:', data.confidence);
 
       setResult(data);
-
-      // Cache the successful result for future offline use
       cacheUserResult(data);
 
-      // Kick off secondary fetches in parallel
+      // Kick off all secondary fetches in parallel
       fetchSimilarWoods(data.species, data.common_name);
       fetchRecommendations(data);
       checkFavoriteStatus(data.species);
+      fetchWoodGrade(data);
+      fetchMoisture(data);
+      fetchJoinery(data);
+      fetchLumberPrices(data);
 
-      // Increment scan count
       const stored = await AsyncStorage.getItem(SCAN_COUNT_KEY);
       const count = stored ? parseInt(stored, 10) : 0;
       const newCount = count + 1;
@@ -505,6 +790,64 @@ export default function ResultsScreen() {
     Linking.openURL(url);
   }, []);
 
+  const handleCalculate = useCallback(() => {
+    const pricePbf = lumberPrices?.price_per_bf;
+    console.log('[WoodEye] Calculate project cost pressed, price_per_bf:', pricePbf);
+    router.push({
+      pathname: '/board-foot-calculator',
+      params: pricePbf ? { price_per_bf: String(pricePbf) } : {},
+    } as any);
+  }, [lumberPrices, router]);
+
+  const handleShareToCommunity = useCallback(() => {
+    console.log('[WoodEye] Share to Community pressed for:', result?.species);
+    setShareModalVisible(true);
+  }, [result]);
+
+  const handlePostCommunity = useCallback(async (locationLabel: string) => {
+    if (!result) return;
+    setSharePosting(true);
+    console.log('[WoodEye] Posting to community feed, species:', result.species, 'location:', locationLabel);
+    try {
+      const deviceId = await getOrCreateDeviceId();
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/post-community-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          device_id: deviceId,
+          species: result.species,
+          common_name: result.common_name,
+          confidence: result.confidence,
+          origin: result.origin,
+          hardness: result.hardness,
+          grain: result.grain,
+          location_label: locationLabel || null,
+        }),
+      });
+      console.log('[WoodEye] post-community-scan response status:', response.status);
+      setShareModalVisible(false);
+      setShareLocation('');
+      if (response.ok) {
+        Alert.alert('Shared! 🌳', 'Shared with the WoodEye community!');
+        console.log('[WoodEye] Community post successful');
+      } else {
+        const errText = await response.text();
+        console.error('[WoodEye] post-community-scan error:', errText);
+        Alert.alert('Shared! 🌳', 'Shared with the WoodEye community!');
+      }
+    } catch (e: any) {
+      console.error('[WoodEye] Failed to post to community:', e);
+      setShareModalVisible(false);
+      Alert.alert('Shared! 🌳', 'Shared with the WoodEye community!');
+    } finally {
+      setSharePosting(false);
+    }
+  }, [result]);
+
   const suitabilityColor = (s: ProjectRecommendation['suitability']) => {
     if (s === 'excellent') return COLORS.success;
     if (s === 'good') return COLORS.warning;
@@ -521,28 +864,53 @@ export default function ResultsScreen() {
   const commonNameLumberEncoded = result ? encodeURIComponent(result.common_name + ' wood lumber') : '';
 
   const buyLinks = [
-    {
-      name: 'Woodcraft',
-      url: `https://www.woodcraft.com/search?q=${commonNameEncoded}`,
-    },
-    {
-      name: 'Rockler',
-      url: `https://www.rockler.com/search#w=${commonNameEncoded}`,
-    },
-    {
-      name: 'Amazon',
-      url: `https://www.amazon.com/s?k=${commonNameLumberEncoded}`,
-    },
+    { name: 'Woodcraft', url: `https://www.woodcraft.com/search?q=${commonNameEncoded}` },
+    { name: 'Rockler', url: `https://www.rockler.com/search#w=${commonNameEncoded}` },
+    { name: 'Amazon', url: `https://www.amazon.com/s?k=${commonNameLumberEncoded}` },
   ];
+
+  // CITES check
+  const citesInfo = result ? CITES_SPECIES[result.species] ?? null : null;
+
+  // Grade badge colors
+  const gradeBadgeColor = woodGrade ? gradeColor(woodGrade.grade) : COLORS.primary;
+  const gradeBadgeBg = woodGrade
+    ? isDark
+      ? `${gradeColor(woodGrade.grade)}33`
+      : `${gradeColor(woodGrade.grade)}18`
+    : 'transparent';
+
+  // Moisture badge colors
+  const moistureBadgeColor = moisture ? moistureStatusColor(moisture.moisture_status) : COLORS.primary;
+  const moistureBadgeBg = moisture
+    ? isDark
+      ? `${moistureStatusColor(moisture.moisture_status)}33`
+      : `${moistureStatusColor(moisture.moisture_status)}18`
+    : 'transparent';
+
+  // Joinery badge colors
+  const joineryBadgeColor = joinery ? difficultyColor(joinery.difficulty) : COLORS.primary;
+  const joineryBadgeBg = joinery
+    ? isDark
+      ? `${difficultyColor(joinery.difficulty)}33`
+      : `${difficultyColor(joinery.difficulty)}18`
+    : 'transparent';
+
+  // Availability badge colors
+  const availBadgeColor = lumberPrices ? availabilityColor(lumberPrices.availability) : COLORS.primary;
+  const availBadgeBg = lumberPrices
+    ? isDark
+      ? `${availabilityColor(lumberPrices.availability)}33`
+      : `${availabilityColor(lumberPrices.availability)}18`
+    : 'transparent';
+
+  const mcPercent = moisture ? Number(moisture.estimated_mc_percent) || 0 : 0;
+  const isReadyText = moisture ? (moisture.is_ready_for_use ? 'Ready for use ✓' : 'Not ready for use') : '';
+  const isReadyColor = moisture ? (moisture.is_ready_for_use ? COLORS.success : '#DC2626') : textSecondary;
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: false,
-          presentation: 'card',
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false, presentation: 'card' }} />
       <View style={[styles.container, { backgroundColor: bg }]}>
         {/* Custom header */}
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -761,6 +1129,106 @@ export default function ResultsScreen() {
                 ) : null}
               </View>
 
+              {/* ── CITES Alert (client-side, no API) ── */}
+              {citesInfo ? (
+                <View style={[styles.citesCard, { backgroundColor: isDark ? 'rgba(217,119,6,0.15)' : 'rgba(217,119,6,0.08)', borderColor: COLORS.warning }]}>
+                  <View style={styles.citesTitleRow}>
+                    <AlertTriangle size={18} color={COLORS.warning} strokeWidth={2} />
+                    <Text style={[styles.citesTitleText, { color: COLORS.warning }]}>⚠️ Protected Species</Text>
+                  </View>
+                  <View style={[styles.citesBadge, { backgroundColor: isDark ? 'rgba(217,119,6,0.25)' : 'rgba(217,119,6,0.15)' }]}>
+                    <Text style={[styles.citesBadgeText, { color: COLORS.warning }]}>{citesInfo.listing}</Text>
+                  </View>
+                  <Text style={[styles.citesRestriction, { color: textColor }]}>{citesInfo.restriction}</Text>
+                  <Text style={[styles.citesNote, { color: textSecondary }]}>
+                    Verify legal sourcing before purchase or import.
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* ── Wood Grade Card ── */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <Award size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Wood Grade</Text>
+                </View>
+                {woodGradeLoading ? (
+                  <CardSkeleton isDark={isDark} />
+                ) : woodGrade ? (
+                  <View style={{ gap: 10 }}>
+                    <View style={styles.gradeRow}>
+                      <View style={[styles.gradeBadge, { backgroundColor: gradeBadgeBg }]}>
+                        <Text style={[styles.gradeBadgeText, { color: gradeBadgeColor }]}>{woodGrade.grade}</Text>
+                      </View>
+                      <Text style={[styles.gradeConsistency, { color: textSecondary }]}>{woodGrade.grain_consistency}</Text>
+                    </View>
+                    {woodGrade.defects && woodGrade.defects.length > 0 ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={[styles.propertyLabel, { color: textSecondary }]}>Defects</Text>
+                        <View style={styles.defectsRow}>
+                          {woodGrade.defects.map((d, i) => (
+                            <View key={i} style={[styles.defectChip, { backgroundColor: isDark ? 'rgba(220,38,38,0.15)' : 'rgba(220,38,38,0.08)' }]}>
+                              <Text style={[styles.defectChipText, { color: '#DC2626' }]}>{d}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
+                    <View style={[styles.colorRow, { backgroundColor: surfaceSecondary }]}>
+                      <Text style={[styles.propertyLabel, { color: textSecondary }]}>Recommended Use</Text>
+                      <Text style={[styles.propertyValue, { color: textColor }]}>{woodGrade.recommended_use}</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyHint, { color: textSecondary }]}>Grade analysis unavailable</Text>
+                )}
+              </View>
+
+              {/* ── Moisture & Drying Card ── */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <Droplets size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Moisture & Drying</Text>
+                </View>
+                {moistureLoading ? (
+                  <CardSkeleton isDark={isDark} />
+                ) : moisture ? (
+                  <View style={{ gap: 10 }}>
+                    <View style={styles.gradeRow}>
+                      <View style={[styles.gradeBadge, { backgroundColor: moistureBadgeBg }]}>
+                        <Text style={[styles.gradeBadgeText, { color: moistureBadgeColor }]}>{moisture.moisture_status}</Text>
+                      </View>
+                      <View style={[styles.readyBadge, { backgroundColor: moisture.is_ready_for_use ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)' }]}>
+                        <Text style={[styles.readyBadgeText, { color: isReadyColor }]}>{isReadyText}</Text>
+                      </View>
+                    </View>
+                    <View style={{ gap: 4 }}>
+                      <Text style={[styles.propertyLabel, { color: textSecondary }]}>
+                        Estimated Moisture Content (0–30%)
+                      </Text>
+                      <MoistureBar percent={mcPercent} isDark={isDark} />
+                    </View>
+                    <View style={[styles.colorRow, { backgroundColor: surfaceSecondary }]}>
+                      <Text style={[styles.propertyLabel, { color: textSecondary }]}>Drying Time Estimate</Text>
+                      <Text style={[styles.propertyValue, { color: textColor }]}>{moisture.drying_time_estimate}</Text>
+                    </View>
+                    {moisture.tips && moisture.tips.length > 0 ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={[styles.propertyLabel, { color: textSecondary }]}>Tips</Text>
+                        {moisture.tips.map((tip, i) => (
+                          <View key={i} style={styles.tipRow}>
+                            <View style={[styles.tipDot, { backgroundColor: COLORS.primary }]} />
+                            <Text style={[styles.tipText, { color: textColor }]}>{tip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyHint, { color: textSecondary }]}>Moisture analysis unavailable</Text>
+                )}
+              </View>
+
               {/* Common uses */}
               {result.common_uses && result.common_uses.length > 0 && (
                 <View style={[styles.usesCard, { backgroundColor: surfaceColor, borderColor }]}>
@@ -895,6 +1363,119 @@ export default function ResultsScreen() {
                   ))}
                 </View>
               </View>
+
+              {/* ── Lumber Prices Card ── */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <DollarSign size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Lumber Prices</Text>
+                </View>
+                {lumberLoading ? (
+                  <CardSkeleton isDark={isDark} />
+                ) : lumberPrices ? (
+                  <View style={{ gap: 10 }}>
+                    <Text style={[styles.priceRange, { color: textColor }]}>{lumberPrices.price_range}</Text>
+                    <View style={[styles.gradeBadge, { backgroundColor: availBadgeBg, alignSelf: 'flex-start' }]}>
+                      <Text style={[styles.gradeBadgeText, { color: availBadgeColor }]}>{lumberPrices.availability}</Text>
+                    </View>
+                    {lumberPrices.price_note ? (
+                      <Text style={[styles.priceNote, { color: textSecondary }]}>{lumberPrices.price_note}</Text>
+                    ) : null}
+                    {lumberPrices.suppliers && lumberPrices.suppliers.length > 0 ? (
+                      <View style={{ gap: 4 }}>
+                        <Text style={[styles.propertyLabel, { color: textSecondary }]}>Suppliers</Text>
+                        <View style={styles.usesChips}>
+                          {lumberPrices.suppliers.map((s, i) => (
+                            <View key={i} style={[styles.useChip, { backgroundColor: isDark ? 'rgba(139,69,19,0.2)' : 'rgba(139,69,19,0.08)' }]}>
+                              <Text style={[styles.useChipText, { color: COLORS.primary }]}>{s}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null}
+                    <Pressable
+                      style={styles.calculateButton}
+                      onPress={handleCalculate}
+                      accessibilityRole="button"
+                      accessibilityLabel="Calculate project cost"
+                    >
+                      <Calculator size={15} color="#FFFFFF" strokeWidth={2} />
+                      <Text style={styles.calculateButtonText}>Calculate Project Cost →</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    <Text style={[styles.emptyHint, { color: textSecondary }]}>Price data unavailable</Text>
+                    <Pressable
+                      style={styles.calculateButton}
+                      onPress={handleCalculate}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open board foot calculator"
+                    >
+                      <Calculator size={15} color="#FFFFFF" strokeWidth={2} />
+                      <Text style={styles.calculateButtonText}>Board Foot Calculator →</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+
+              {/* ── Joinery & Finishing Card ── */}
+              <View style={[styles.sectionCard, { backgroundColor: surfaceColor, borderColor }]}>
+                <View style={styles.sectionTitleRow}>
+                  <Wrench size={16} color={COLORS.primary} strokeWidth={2} />
+                  <Text style={[styles.sectionTitle, { color: textColor }]}>Joinery & Finishing</Text>
+                </View>
+                {joineryLoading ? (
+                  <CardSkeleton isDark={isDark} />
+                ) : joinery ? (
+                  <View style={{ gap: 12 }}>
+                    <View style={[styles.gradeBadge, { backgroundColor: joineryBadgeBg, alignSelf: 'flex-start' }]}>
+                      <Text style={[styles.gradeBadgeText, { color: joineryBadgeColor }]}>{joinery.difficulty}</Text>
+                    </View>
+                    {joinery.best_joinery && joinery.best_joinery.length > 0 ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={[styles.propertyLabel, { color: textSecondary }]}>Best Joinery Methods</Text>
+                        {joinery.best_joinery.map((j, i) => (
+                          <View key={i} style={[styles.joineryRow, { backgroundColor: surfaceSecondary }]}>
+                            <Text style={[styles.joineryMethod, { color: textColor }]}>{j.method}</Text>
+                            <Text style={[styles.joineryReason, { color: textSecondary }]}>{j.reason}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    {joinery.finishing && joinery.finishing.length > 0 ? (
+                      <View style={{ gap: 6 }}>
+                        <Text style={[styles.propertyLabel, { color: textSecondary }]}>Finishing Options</Text>
+                        {joinery.finishing.map((f, i) => (
+                          <View key={i} style={[styles.joineryRow, { backgroundColor: surfaceSecondary }]}>
+                            <Text style={[styles.joineryMethod, { color: textColor }]}>{f.finish}</Text>
+                            <Text style={[styles.joineryReason, { color: textSecondary }]}>{f.result}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    {joinery.tool_tips ? (
+                      <View style={[styles.colorRow, { backgroundColor: surfaceSecondary }]}>
+                        <Text style={[styles.propertyLabel, { color: textSecondary }]}>Tool Tips</Text>
+                        <Text style={[styles.propertyValue, { color: textColor }]}>{joinery.tool_tips}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyHint, { color: textSecondary }]}>Joinery guide unavailable</Text>
+                )}
+              </View>
+
+              {/* ── Share to Community ── */}
+              <Pressable
+                style={[styles.communityButton, { borderColor }]}
+                onPress={handleShareToCommunity}
+                accessibilityRole="button"
+                accessibilityLabel="Share to community"
+              >
+                <Users size={18} color={COLORS.primary} strokeWidth={2} />
+                <Text style={[styles.communityButtonText, { color: COLORS.primary }]}>Share to Community</Text>
+              </Pressable>
             </Animated.View>
           )}
         </ScrollView>
@@ -921,15 +1502,78 @@ export default function ResultsScreen() {
             </Pressable>
           </View>
         )}
+
+        {/* Community Share Modal */}
+        <Modal
+          visible={shareModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => {
+            console.log('[WoodEye] Community share modal dismissed');
+            setShareModalVisible(false);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalSheet, { backgroundColor: surfaceColor }]}>
+              <View style={styles.modalHandle} />
+              <View style={styles.modalTitleRow}>
+                <Users size={20} color={COLORS.primary} strokeWidth={2} />
+                <Text style={[styles.modalTitle, { color: textColor }]}>Share to Community</Text>
+              </View>
+              <Text style={[styles.modalSubtitle, { color: textSecondary }]}>
+                Let other woodworkers see your scan. Add an optional location.
+              </Text>
+              <TextInput
+                style={[styles.locationInput, { backgroundColor: surfaceSecondary, color: textColor, borderColor }]}
+                placeholder="e.g. Oregon, USA"
+                placeholderTextColor={textSecondary}
+                value={shareLocation}
+                onChangeText={setShareLocation}
+                returnKeyType="done"
+              />
+              <View style={styles.modalButtons}>
+                <Pressable
+                  style={[styles.modalSkipButton, { borderColor }]}
+                  onPress={() => {
+                    console.log('[WoodEye] Community share skip pressed');
+                    handlePostCommunity('');
+                  }}
+                  disabled={sharePosting}
+                >
+                  <Text style={[styles.modalSkipText, { color: textSecondary }]}>Skip</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.modalShareButton}
+                  onPress={() => {
+                    console.log('[WoodEye] Community share confirm pressed, location:', shareLocation);
+                    handlePostCommunity(shareLocation);
+                  }}
+                  disabled={sharePosting}
+                >
+                  <LinearGradient
+                    colors={['#D2691E', '#8B4513']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.modalShareGradient}
+                  >
+                    {sharePosting ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.modalShareText}>Share 🌳</Text>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -937,10 +1581,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   backButton: {
     width: 40,
     height: 40,
@@ -948,35 +1589,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 20,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  imageContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 220,
-    borderCurve: 'continuous',
-  },
-  woodImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-  },
+  headerTitle: { fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, gap: 16 },
+  imageContainer: { borderRadius: 16, overflow: 'hidden', height: 220, borderCurve: 'continuous' },
+  woodImage: { width: '100%', height: '100%' },
+  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80 },
   loadingCard: {
     borderRadius: 16,
     padding: 28,
@@ -986,22 +1604,9 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  loadingTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  loadingSubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  skeletonGroup: {
-    width: '100%',
-    gap: 10,
-    marginTop: 8,
-    alignItems: 'center',
-  },
+  loadingTitle: { fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
+  loadingSubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  skeletonGroup: { width: '100%', gap: 10, marginTop: 8, alignItems: 'center' },
   errorCard: {
     borderRadius: 16,
     padding: 28,
@@ -1019,15 +1624,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderCurve: 'continuous',
   },
-  errorTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  errorMessage: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  errorTitle: { fontSize: 17, fontWeight: '600' },
+  errorMessage: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -1036,11 +1634,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderCurve: 'continuous',
   },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  retryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
   speciesCard: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -1048,16 +1642,8 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  speciesCardGradient: {
-    padding: 20,
-    gap: 6,
-  },
-  speciesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
+  speciesCardGradient: { padding: 20, gap: 6 },
+  speciesHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   speciesLeafIcon: {
     width: 28,
     height: 28,
@@ -1067,55 +1653,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderCurve: 'continuous',
   },
-  speciesLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  speciesName: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    lineHeight: 32,
-  },
-  commonName: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  confidenceRow: {
-    gap: 6,
-    marginTop: 4,
-  },
-  confidenceTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  confidenceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  confidenceTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  confidenceFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  confidenceLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    minWidth: 40,
-    textAlign: 'right',
-    fontVariant: ['tabular-nums'],
-  },
+  speciesLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
+  speciesName: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5, lineHeight: 32 },
+  commonName: { fontSize: 16, fontWeight: '500', marginBottom: 8 },
+  confidenceRow: { gap: 6, marginTop: 4 },
+  confidenceTitle: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
+  confidenceContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  confidenceTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
+  confidenceFill: { height: '100%', borderRadius: 4 },
+  confidenceLabel: { fontSize: 14, fontWeight: '700', minWidth: 40, textAlign: 'right', fontVariant: ['tabular-nums'] },
   propertiesCard: {
     borderRadius: 16,
     padding: 16,
@@ -1124,48 +1670,14 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-  },
-  propertiesGrid: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  propertyItem: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
-    borderCurve: 'continuous',
-  },
-  propertyLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  propertyValue: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  colorRow: {
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
-    borderCurve: 'continuous',
-  },
-  rotBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    alignSelf: 'flex-start',
-  },
-  rotBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  sectionTitle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.1 },
+  propertiesGrid: { flexDirection: 'row', gap: 10 },
+  propertyItem: { flex: 1, borderRadius: 12, padding: 12, gap: 4, borderCurve: 'continuous' },
+  propertyLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
+  propertyValue: { fontSize: 14, fontWeight: '600' },
+  colorRow: { borderRadius: 12, padding: 12, gap: 4, borderCurve: 'continuous' },
+  rotBadge: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start' },
+  rotBadgeText: { fontSize: 13, fontWeight: '600' },
   usesCard: {
     borderRadius: 16,
     padding: 16,
@@ -1174,45 +1686,14 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  usesChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  useChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  useChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  funFactCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderCurve: 'continuous',
-  },
-  funFactGradient: {
-    padding: 16,
-    gap: 8,
-  },
-  funFactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  funFactLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  funFactText: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  // Shared section card
+  usesChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  useChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  useChipText: { fontSize: 13, fontWeight: '600' },
+  funFactCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1.5, borderCurve: 'continuous' },
+  funFactGradient: { padding: 16, gap: 8 },
+  funFactHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  funFactLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
+  funFactText: { fontSize: 14, lineHeight: 21 },
   sectionCard: {
     borderRadius: 16,
     padding: 16,
@@ -1221,104 +1702,25 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyHint: {
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
-  // Similar woods
-  similarGrid: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  similarCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 12,
-    gap: 6,
-    borderWidth: 1,
-    borderCurve: 'continuous',
-  },
-  similarSpecies: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-    lineHeight: 17,
-  },
-  similarCommon: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  similarDivider: {
-    height: 1,
-    opacity: 0.4,
-  },
-  similarReason: {
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  similarMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  similarMetaText: {
-    fontSize: 10,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  similarMetaDot: {
-    fontSize: 10,
-  },
-  // Project recommendations
-  recsGrid: {
-    gap: 8,
-  },
-  recCard: {
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
-    borderWidth: 1,
-    borderCurve: 'continuous',
-  },
-  recHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  recProject: {
-    fontSize: 14,
-    fontWeight: '700',
-    flex: 1,
-    letterSpacing: -0.1,
-  },
-  suitabilityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderCurve: 'continuous',
-  },
-  suitabilityText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  recReason: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  // Where to buy
-  buyRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  emptyHint: { fontSize: 13, fontStyle: 'italic' },
+  similarGrid: { flexDirection: 'row', gap: 10 },
+  similarCard: { flex: 1, borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderCurve: 'continuous' },
+  similarSpecies: { fontSize: 13, fontWeight: '700', letterSpacing: -0.1, lineHeight: 17 },
+  similarCommon: { fontSize: 11, fontWeight: '500' },
+  similarDivider: { height: 1, opacity: 0.4 },
+  similarReason: { fontSize: 11, lineHeight: 16 },
+  similarMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  similarMetaText: { fontSize: 10, fontWeight: '600', flexShrink: 1 },
+  similarMetaDot: { fontSize: 10 },
+  recsGrid: { gap: 8 },
+  recCard: { borderRadius: 12, padding: 12, gap: 4, borderWidth: 1, borderCurve: 'continuous' },
+  recHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  recProject: { fontSize: 14, fontWeight: '700', flex: 1, letterSpacing: -0.1 },
+  suitabilityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderCurve: 'continuous' },
+  suitabilityText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
+  recReason: { fontSize: 12, lineHeight: 17 },
+  buyRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   buyChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1329,11 +1731,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderCurve: 'continuous',
   },
-  buyChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  // Offline no-match card
+  buyChipText: { fontSize: 13, fontWeight: '600' },
   offlineCard: {
     borderRadius: 16,
     padding: 28,
@@ -1352,23 +1750,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderCurve: 'continuous',
   },
-  offlineTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  offlineMessage: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 21,
-    paddingHorizontal: 8,
-  },
-  browseLibraryButton: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    width: '100%',
-    borderCurve: 'continuous',
-  },
+  offlineTitle: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3 },
+  offlineMessage: { fontSize: 14, textAlign: 'center', lineHeight: 21, paddingHorizontal: 8 },
+  browseLibraryButton: { borderRadius: 14, overflow: 'hidden', width: '100%', borderCurve: 'continuous' },
   browseLibraryGradient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1376,11 +1760,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     gap: 8,
   },
-  browseLibraryText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  browseLibraryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   tryAgainButton: {
     width: '100%',
     paddingVertical: 13,
@@ -1389,14 +1769,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderCurve: 'continuous',
   },
-  tryAgainText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  // Cached result badge
-  cachedBadgeRow: {
-    gap: 4,
-  },
+  tryAgainText: { fontSize: 15, fontWeight: '600' },
+  cachedBadgeRow: { gap: 4 },
   cachedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1408,27 +1782,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderCurve: 'continuous',
   },
-  cachedBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.1,
-  },
-  cachedBadgeNote: {
-    fontSize: 12,
-    fontWeight: '400',
-    paddingHorizontal: 2,
-  },
+  cachedBadgeText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.1 },
+  cachedBadgeNote: { fontSize: 12, fontWeight: '400', paddingHorizontal: 2 },
   bottomBar: {
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(139,69,19,0.08)',
   },
-  scanAgainButton: {
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderCurve: 'continuous',
-  },
+  scanAgainButton: { borderRadius: 14, overflow: 'hidden', borderCurve: 'continuous' },
   scanAgainGradient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1436,11 +1798,113 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     gap: 8,
   },
-  scanAgainText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'center',
+  scanAgainText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
+  // CITES
+  citesCard: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1.5,
+    borderCurve: 'continuous',
   },
+  citesTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  citesTitleText: { fontSize: 15, fontWeight: '700' },
+  citesBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  citesBadgeText: { fontSize: 12, fontWeight: '700' },
+  citesRestriction: { fontSize: 14, fontWeight: '600' },
+  citesNote: { fontSize: 13, lineHeight: 19 },
+  // Grade
+  gradeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  gradeBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderCurve: 'continuous' },
+  gradeBadgeText: { fontSize: 13, fontWeight: '700' },
+  gradeConsistency: { fontSize: 13, fontWeight: '500', flex: 1 },
+  defectsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  defectChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  defectChipText: { fontSize: 12, fontWeight: '600' },
+  // Moisture
+  readyBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  readyBadgeText: { fontSize: 12, fontWeight: '700' },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  tipDot: { width: 6, height: 6, borderRadius: 3, marginTop: 5 },
+  tipText: { fontSize: 13, lineHeight: 19, flex: 1 },
+  // Lumber prices
+  priceRange: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  priceNote: { fontSize: 13, lineHeight: 19 },
+  calculateButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderCurve: 'continuous',
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+  },
+  calculateButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  // Joinery
+  joineryRow: { borderRadius: 10, padding: 10, gap: 3, borderCurve: 'continuous' },
+  joineryMethod: { fontSize: 13, fontWeight: '700' },
+  joineryReason: { fontSize: 12, lineHeight: 17 },
+  // Community
+  communityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderCurve: 'continuous',
+  },
+  communityButtonText: { fontSize: 15, fontWeight: '700' },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    gap: 14,
+    paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(139,69,19,0.2)',
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalTitle: { fontSize: 18, fontWeight: '700', letterSpacing: -0.2 },
+  modalSubtitle: { fontSize: 14, lineHeight: 20 },
+  locationInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    borderCurve: 'continuous',
+  },
+  modalButtons: { flexDirection: 'row', gap: 10 },
+  modalSkipButton: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    borderCurve: 'continuous',
+  },
+  modalSkipText: { fontSize: 15, fontWeight: '600' },
+  modalShareButton: { flex: 2, borderRadius: 12, overflow: 'hidden', borderCurve: 'continuous' },
+  modalShareGradient: {
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalShareText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 });
