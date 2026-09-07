@@ -4,14 +4,15 @@
     "slug": "woodeye",
     "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/newly.png",
+      "image": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#FFFFFF"
     },
     "ios": {
+      "icon": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg",
       "supportsTablet": true,
       "bundleIdentifier": "com.woodeye.app",
       "infoPlist": {
@@ -25,7 +26,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg",
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.woodeye.app",
@@ -47,7 +48,7 @@
       "expo-secure-store",
       "expo-camera",
       "expo-media-library",
-      ["expo-notifications", { "icon": "./assets/images/icon.png", "color": "#8B4513" }]
+      ["expo-notifications", { "icon": "./assets/images/26ad3839-d216-4537-8712-0ed9af491b21.jpeg", "color": "#8B4513" }]
     ],
     "scheme": "woodeye",
     "experiments": {
