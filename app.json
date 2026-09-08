@@ -27,8 +27,7 @@
         ]
       },
       "entitlements": {
-        "aps-environment": "production",
-        "com.apple.security.application-groups": ["group.com.woodeye.app.onesignal"]
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -49,12 +48,6 @@
       "bundler": "metro"
     },
     "plugins": [
-      [
-        "onesignal-expo-plugin",
-        {
-          "mode": "production"
-        }
-      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
