@@ -27,7 +27,8 @@
         ]
       },
       "entitlements": {
-        "aps-environment": "production"
+        "aps-environment": "production",
+        "com.apple.security.application-groups": ["group.com.woodeye.app.onesignal"]
       }
     },
     "android": {
