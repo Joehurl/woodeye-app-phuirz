@@ -1,4 +1,7 @@
 {
+  "cli": {
+    "promptToConfigurePushNotifications": false
+  },
   "build": {
     "development": {
       "developmentClient": true,
