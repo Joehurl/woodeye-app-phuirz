@@ -21,7 +21,16 @@
         "NSPhotoLibraryUsageDescription": "WoodEye accesses your photo library so you can select wood photos for AI species identification.",
         "NSPhotoLibraryAddUsageDescription": "WoodEye saves AR wood preview captures to your photo library.",
         "NSLocationWhenInUseUsageDescription": "WoodEye can optionally tag your wood scan location when sharing to the community.",
-        "NSUserNotificationsUsageDescription": "WoodEye sends you a daily wood fact notification."
+        "NSUserNotificationsUsageDescription": "WoodEye sends you a daily wood fact notification.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      },
+      "entitlements": {
+        "aps-environment": "production",
+        "com.apple.security.application-groups": [
+          "group.com.woodeye.app.onesignal"
+        ]
       }
     },
     "android": {
@@ -42,6 +51,12 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production"
+        }
+      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
@@ -64,7 +79,8 @@
       "router": {},
       "revenueCatApiKeyAndroid": "REVENUECAT_ANDROID_API_KEY",
       "revenueCatApiKeyIos": "REVENUECAT_IOS_API_KEY",
-      "revenueCatEntitlementId": "pro"
+      "revenueCatEntitlementId": "pro",
+      "oneSignalAppId": "4f075e36-8d7b-404f-ae3f-6ab78ed199c6"
     }
   }
 }

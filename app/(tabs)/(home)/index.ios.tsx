@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Camera, Leaf, Zap } from 'lucide-react-native';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { NotificationBell } from "@/components/NotificationBell";
 
 const SCAN_COUNT_KEY = 'woodeye_scan_count';
 const FREE_SCAN_LIMIT = 4;
@@ -161,6 +162,9 @@ export default function HomeScreen() {
                   <Leaf size={22} color="#FFFFFF" strokeWidth={2} />
                 </View>
                 <Text style={styles.logoText}>WoodEye</Text>
+                <View style={styles.bellWrapper}>
+                  <NotificationBell />
+                </View>
               </View>
               <Text style={styles.headerSubtitle}>AI Wood Species Identifier</Text>
             </View>
@@ -293,6 +297,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
+    flex: 1,
+  },
+  bellWrapper: {
+    marginLeft: 'auto',
   },
   headerSubtitle: {
     fontSize: 13,
